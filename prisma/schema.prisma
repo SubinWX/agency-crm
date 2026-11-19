@@ -1,0 +1,1071 @@
+// CRM / Workshop Management — Phase 1 (Core) schema.
+// Conventions:
+//  * Important records are soft-deleted (deletedAt) — never hard-deleted by default.
+//  * Calendar dates (work dates) are stored as DATE in the business timezone.
+//  * Timestamps are stored in UTC (timestamptz).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Identity & RBAC ─────────────────────────────
+
+/// Which login portal a role signs in through.
+enum Portal {
+  ADMIN // Super Admin, Admin, Staff
+  AGENT
+  WORKER
+  CUSTOMER // future customer portal
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Role {
+  id           String           @id @default(cuid())
+  key          String           @unique // e.g. super_admin, admin, staff, agent, worker
+  name         String
+  description  String?
+  portal       Portal
+  /// Super Admin role: implicitly holds every permission and sees every branch.
+  isSuperAdmin Boolean          @default(false)
+  /// System roles cannot be deleted.
+  isSystem     Boolean          @default(false)
+  permissions  RolePermission[]
+  users        User[]
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique // e.g. works.create
+  group       String
+  description String
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  phone        String?
+  photoUrl     String?
+  passwordHash String
+  roleId       String
+  role         Role         @relation(fields: [roleId], references: [id])
+  status       RecordStatus @default(ACTIVE)
+  lastLoginAt  DateTime?    @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt    DateTime?    @db.Timestamptz(3)
+
+  staffProfile StaffProfile?
+  branches     UserBranch[]
+  sessions     Session[]
+  /// Future customer portal: a customer record can be linked to a login.
+  customer     Customer?     @relation("CustomerLogin")
+
+  agentWorks         Work[]           @relation("WorkAgent")
+  createdWorks       Work[]           @relation("WorkCreator")
+  assignments        WorkAssignment[] @relation("AssignmentWorker")
+  notifications      Notification[]
+  inChargeOfBranches Branch[]         @relation("BranchInCharge")
+  /// Personal commission % override (null = company default for the role).
+  commissionPercent  Decimal?         @db.Decimal(5, 2)
+  commissions        Commission[]
+  salaryPayments     SalaryPayment[]  @relation("SalaryPayee")
+
+  @@index([roleId])
+}
+
+model StaffProfile {
+  userId           String    @id
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address          String?
+  emergencyContact String?
+  idProofKey       String? // storage key of the ID proof file (private)
+  joiningDate      DateTime? @db.Date
+  salaryAmount     Decimal?  @db.Decimal(12, 2)
+  salaryType       String? // monthly / daily / hourly (Phase 2)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  /// SHA-256 of the session token; the raw token only lives in the httpOnly cookie.
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @db.Timestamptz(3)
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+}
+
+// ───────────────────────────── Branches ─────────────────────────────
+
+model Branch {
+  id         String       @id @default(cuid())
+  name       String
+  code       String       @unique
+  address    String?
+  phone      String?
+  email      String?
+  imageKey   String?
+  inChargeId String?
+  inCharge   User?        @relation("BranchInCharge", fields: [inChargeId], references: [id])
+  status     RecordStatus @default(ACTIVE)
+  createdAt  DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt  DateTime?    @db.Timestamptz(3)
+
+  users     UserBranch[]
+  works     Work[]
+  customers Customer[]
+  invoices  Invoice[]
+  expenses  Expense[]
+  stock     StockLevel[]
+  movements StockMovement[]
+}
+
+model UserBranch {
+  userId   String
+  branchId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([userId, branchId])
+  @@index([branchId])
+}
+
+// ───────────────────────────── Customers ─────────────────────────────
+
+model Customer {
+  id          String       @id @default(cuid())
+  name        String
+  phone       String
+  altPhone    String?
+  email       String?
+  address     String?
+  location    String?
+  notes       String?
+  status      RecordStatus @default(ACTIVE)
+  branchId    String?
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+  createdById String?
+  /// Future customer portal login.
+  userId      String?      @unique
+  user        User?        @relation("CustomerLogin", fields: [userId], references: [id])
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime?    @db.Timestamptz(3)
+
+  works     Work[]
+  invoices  Invoice[]
+  gstNumber String?
+
+  @@index([phone])
+  @@index([name])
+}
+
+// ───────────────────────────── Capacity ─────────────────────────────
+
+/// Single-row table (id = 1) holding the company-wide daily work capacity.
+model CapacitySetting {
+  id          Int      @id @default(1)
+  maxPerDay   Int
+  updatedById String?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model CapacityHistory {
+  id          String   @id @default(cuid())
+  oldValue    Int?
+  newValue    Int
+  reason      String?
+  changedById String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+}
+
+/// One row per calendar date. Used as the lock target that serialises
+/// capacity checks for a date (SELECT … FOR UPDATE), and to hold future
+/// blocked-date / holiday information.
+model WorkDay {
+  date        DateTime @id @db.Date
+  isBlocked   Boolean  @default(false)
+  blockReason String?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// ───────────────────────────── Works ─────────────────────────────
+
+enum WorkStatus {
+  DRAFT
+  SUBMITTED
+  SCHEDULED
+  ASSIGNED
+  IN_PROGRESS
+  WORKER_COMPLETED
+  PENDING_APPROVAL
+  APPROVED
+  INVOICED
+  PAYMENT_PENDING
+  PAID
+  CLOSED
+  CANCELLED
+}
+
+model Work {
+  id              String     @id @default(cuid())
+  reference       String     @unique // WRK-000001
+  customerId      String
+  customer        Customer   @relation(fields: [customerId], references: [id])
+  agentId         String?
+  agent           User?      @relation("WorkAgent", fields: [agentId], references: [id])
+  branchId        String
+  branch          Branch     @relation(fields: [branchId], references: [id])
+  workDate        DateTime   @db.Date
+  status          WorkStatus @default(SUBMITTED)
+  title           String?
+  description     String?
+  locationAddress String?
+  locationNotes   String?
+  latitude        Decimal?   @db.Decimal(9, 6)
+  longitude       Decimal?   @db.Decimal(9, 6)
+  createdById     String
+  createdBy       User       @relation("WorkCreator", fields: [createdById], references: [id])
+  cancelReason    String?
+  approvedAt      DateTime?  @db.Timestamptz(3)
+  approvedById    String?
+  createdAt       DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime?  @db.Timestamptz(3)
+
+  customValues  CustomFieldValue[]
+  images        WorkImage[]
+  comments      WorkComment[]
+  statusHistory WorkStatusHistory[]
+  changes       WorkFieldChange[]
+  assignments   WorkAssignment[]
+  completions   WorkCompletion[]
+  reviews       WorkReview[]
+  invoices      Invoice[]
+  payments      Payment[]
+  commissions   Commission[]
+  expenses      Expense[]
+  materials     StockMovement[]
+
+  @@index([workDate, status])
+  @@index([branchId, workDate])
+  @@index([agentId])
+  @@index([customerId])
+}
+
+model WorkStatusHistory {
+  id          String      @id @default(cuid())
+  workId      String
+  work        Work        @relation(fields: [workId], references: [id])
+  fromStatus  WorkStatus?
+  toStatus    WorkStatus
+  reason      String?
+  changedById String
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([workId])
+}
+
+/// Field-level change history (location A → B, date changes, custom fields …).
+model WorkFieldChange {
+  id          String   @id @default(cuid())
+  workId      String
+  work        Work     @relation(fields: [workId], references: [id])
+  field       String
+  oldValue    Json?
+  newValue    Json?
+  reason      String?
+  changedById String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([workId])
+}
+
+// ───────────────────────────── Custom fields ─────────────────────────────
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DECIMAL
+  DROPDOWN
+  DATE
+  CHECKBOX
+  RADIO
+  TEXTAREA
+  IMAGE
+}
+
+model CustomField {
+  id        String          @id @default(cuid())
+  key       String          @unique
+  label     String
+  type      CustomFieldType
+  required  Boolean         @default(false)
+  active    Boolean         @default(true)
+  sortOrder Int             @default(0)
+  /// Options for DROPDOWN / RADIO: ["Black", "White", …]
+  options   Json?
+  helpText  String?
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+
+  values CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id        String      @id @default(cuid())
+  workId    String
+  work      Work        @relation(fields: [workId], references: [id])
+  fieldId   String
+  field     CustomField @relation(fields: [fieldId], references: [id])
+  /// Typed JSON value: string | number | boolean | "YYYY-MM-DD"
+  value     Json
+  updatedAt DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@unique([workId, fieldId])
+}
+
+// ───────────────────────────── Images (versioned) ─────────────────────────────
+
+enum WorkImageKind {
+  AGENT // work / location images uploaded by agent or office
+  COMPLETION // worker completion images
+}
+
+enum WorkImageStatus {
+  ACTIVE
+  REMOVED
+}
+
+/// A logical image "slot" on a work. Replacing an image adds a new version;
+/// previous versions are never deleted.
+model WorkImage {
+  id           String          @id @default(cuid())
+  workId       String
+  work         Work            @relation(fields: [workId], references: [id])
+  kind         WorkImageKind
+  caption      String?
+  status       WorkImageStatus @default(ACTIVE)
+  removedAt    DateTime?       @db.Timestamptz(3)
+  removedById  String?
+  removeReason String?
+  completionId String?
+  completion   WorkCompletion? @relation(fields: [completionId], references: [id])
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+
+  versions WorkImageVersion[]
+
+  @@index([workId, kind])
+}
+
+model WorkImageVersion {
+  id           String    @id @default(cuid())
+  imageId      String
+  image        WorkImage @relation(fields: [imageId], references: [id])
+  version      Int
+  isCurrent    Boolean
+  storageKey   String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String
+  /// Required when this version replaces a previous one.
+  reason       String?
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([imageId, version])
+  @@index([imageId, isCurrent])
+}
+
+// ───────────────────────────── Comments / assignment / completion ─────────────
+
+model WorkComment {
+  id        String    @id @default(cuid())
+  workId    String
+  work      Work      @relation(fields: [workId], references: [id])
+  authorId  String
+  body      String
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  @@index([workId])
+}
+
+/// Assignment history: rows are never deleted; removal sets removedAt.
+model WorkAssignment {
+  id           String    @id @default(cuid())
+  workId       String
+  work         Work      @relation(fields: [workId], references: [id])
+  workerId     String
+  worker       User      @relation("AssignmentWorker", fields: [workerId], references: [id])
+  assignedById String
+  assignedAt   DateTime  @default(now()) @db.Timestamptz(3)
+  removedAt    DateTime? @db.Timestamptz(3)
+  removedById  String?
+  removeReason String?
+
+  @@index([workId])
+  @@index([workerId, removedAt])
+}
+
+model WorkCompletion {
+  id            String      @id @default(cuid())
+  workId        String
+  work          Work        @relation(fields: [workId], references: [id])
+  submittedById String
+  message       String?
+  description   String?
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  images        WorkImage[]
+
+  @@index([workId])
+}
+
+enum ReviewDecision {
+  APPROVED
+  REJECTED
+}
+
+model WorkReview {
+  id           String         @id @default(cuid())
+  workId       String
+  work         Work           @relation(fields: [workId], references: [id])
+  decision     ReviewDecision
+  comment      String?
+  reviewedById String
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([workId])
+}
+
+// ───────────────────────────── Notifications (in-app) ─────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, readAt])
+}
+
+// ───────────────────────────── Settings / numbering / audit ─────────────────
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+/// Atomic sequence counters for human-readable references (WRK, INV, PAY, SUP…).
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  reason     String?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ═════════════════════════════ PHASE 2 — BILLING ═════════════════════════════
+// Money is stored as DECIMAL(12,2) and calculated in integer paise in code.
+// Financial rows are never hard-deleted: invoices are cancelled, payments and
+// expenses are voided, with reason + user + time.
+
+enum InvoiceStatus {
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum TaxType {
+  INTRA_STATE // CGST + SGST
+  INTER_STATE // IGST
+  NONE
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  number      String        @unique // INV-000001
+  workId      String
+  work        Work          @relation(fields: [workId], references: [id])
+  customerId  String
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  branchId    String
+  branch      Branch        @relation(fields: [branchId], references: [id])
+  invoiceDate DateTime      @db.Date
+  dueDate     DateTime?     @db.Date
+  status      InvoiceStatus @default(ISSUED)
+  taxType     TaxType       @default(INTRA_STATE)
+
+  /// Snapshots so historical invoices never change when master data changes.
+  customerSnapshot Json
+  companySnapshot  Json
+
+  subtotal      Decimal @db.Decimal(12, 2) // sum(qty × rate)
+  discountTotal Decimal @db.Decimal(12, 2)
+  taxableTotal  Decimal @db.Decimal(12, 2)
+  cgstTotal     Decimal @db.Decimal(12, 2)
+  sgstTotal     Decimal @db.Decimal(12, 2)
+  igstTotal     Decimal @db.Decimal(12, 2)
+  taxTotal      Decimal @db.Decimal(12, 2)
+  roundOff      Decimal @db.Decimal(12, 2)
+  grandTotal    Decimal @db.Decimal(12, 2)
+  amountPaid    Decimal @default(0) @db.Decimal(12, 2)
+  balanceDue    Decimal @db.Decimal(12, 2)
+
+  notes         String?
+  createdById   String
+  cancelledAt   DateTime? @db.Timestamptz(3)
+  cancelledById String?
+  cancelReason  String?
+  paidAt        DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@index([workId])
+  @@index([customerId])
+  @@index([branchId, invoiceDate])
+  @@index([status])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sortOrder   Int
+  description String
+  hsnSac      String?
+  quantity    Decimal @db.Decimal(12, 3)
+  unit        String?
+  rate        Decimal @db.Decimal(12, 2)
+  discount    Decimal @db.Decimal(12, 2) // line discount amount
+  taxRate     Decimal @db.Decimal(5, 2) // GST % e.g. 18
+  taxable     Decimal @db.Decimal(12, 2)
+  taxAmount   Decimal @db.Decimal(12, 2)
+  lineTotal   Decimal @db.Decimal(12, 2)
+
+  @@index([invoiceId])
+}
+
+enum PaymentMethod {
+  UPI // GPay / UPI
+  CASH
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  number       String        @unique // PAY-000001
+  invoiceId    String
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
+  workId       String
+  work         Work          @relation(fields: [workId], references: [id])
+  amount       Decimal       @db.Decimal(12, 2)
+  paidOn       DateTime      @db.Date
+  method       PaymentMethod
+  reference    String?
+  notes        String?
+  receivedById String
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  voidedAt     DateTime?     @db.Timestamptz(3)
+  voidedById   String?
+  voidReason   String?
+
+  @@index([invoiceId])
+  @@index([paidOn])
+  @@index([reference])
+}
+
+enum CommissionType {
+  AGENT
+  WORKER
+}
+
+enum CommissionStatus {
+  ACCRUED // calculated; follows invoice changes
+  APPROVED // frozen, approved for payout
+  PAID
+  CANCELLED
+}
+
+/// One commission line per (work, person, type). Created when a work is approved.
+model Commission {
+  id              String           @id @default(cuid())
+  workId          String
+  work            Work             @relation(fields: [workId], references: [id])
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  type            CommissionType
+  percent         Decimal          @db.Decimal(5, 2)
+  /// Share of the percent for split worker commissions (1 = full).
+  shareFactor     Decimal          @default(1) @db.Decimal(6, 4)
+  baseAmount      Decimal          @db.Decimal(12, 2)
+  amount          Decimal          @db.Decimal(12, 2)
+  /// True when an authorised user set the amount manually.
+  isManual        Boolean          @default(false)
+  status          CommissionStatus @default(ACCRUED)
+  approvedAt      DateTime?        @db.Timestamptz(3)
+  approvedById    String?
+  paidAt          DateTime?        @db.Timestamptz(3)
+  paidById        String?
+  payoutReference String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+
+  history CommissionHistory[]
+
+  @@unique([workId, userId, type])
+  @@index([userId, status])
+}
+
+model CommissionHistory {
+  id           String     @id @default(cuid())
+  commissionId String
+  commission   Commission @relation(fields: [commissionId], references: [id])
+  action       String // created, recalculated, adjusted, approved, paid, cancelled
+  oldPercent   Decimal?   @db.Decimal(5, 2)
+  newPercent   Decimal?   @db.Decimal(5, 2)
+  oldAmount    Decimal?   @db.Decimal(12, 2)
+  newAmount    Decimal?   @db.Decimal(12, 2)
+  reason       String?
+  changedById  String?
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@index([commissionId])
+}
+
+/// History of personal/default commission-rate changes (5% → 7%).
+model CommissionRateHistory {
+  id          String   @id @default(cuid())
+  scope       String // "default:AGENT", "default:WORKER" or "user:<id>"
+  oldPercent  Decimal? @db.Decimal(5, 2)
+  newPercent  Decimal? @db.Decimal(5, 2)
+  reason      String?
+  changedById String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+}
+
+enum ExpenseStatus {
+  ACTIVE
+  VOID
+}
+
+model ExpenseCategory {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  active   Boolean   @default(true)
+  expenses Expense[]
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  number      String          @unique // EXP-000001
+  title       String
+  amount      Decimal         @db.Decimal(12, 2)
+  spentOn     DateTime        @db.Date
+  categoryId  String
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  branchId    String?
+  branch      Branch?         @relation(fields: [branchId], references: [id])
+  /// Optional link to a work for job costing.
+  workId      String?
+  work        Work?           @relation(fields: [workId], references: [id])
+  description String?
+  receiptKey  String?
+  receiptMime String?
+  addedById   String
+  status      ExpenseStatus   @default(ACTIVE)
+  voidedAt    DateTime?       @db.Timestamptz(3)
+  voidedById  String?
+  voidReason  String?
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([spentOn])
+  @@index([branchId, spentOn])
+}
+
+model SalaryPayment {
+  id         String        @id @default(cuid())
+  userId     String
+  user       User          @relation("SalaryPayee", fields: [userId], references: [id])
+  period     String // YYYY-MM
+  amount     Decimal       @db.Decimal(12, 2)
+  paidOn     DateTime      @db.Date
+  method     PaymentMethod
+  reference  String?
+  notes      String?
+  paidById   String
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  voidedAt   DateTime?     @db.Timestamptz(3)
+  voidedById String?
+  voidReason String?
+
+  @@index([userId, period])
+}
+
+// ═════════════════════════════ PHASE 3 — INVENTORY ═════════════════════════════
+// Products and raw materials share one catalog table (kind), with stock held
+// per branch in StockLevel. Quantities only change through StockMovement rows,
+// which are append-only (corrections are new movements, never edits).
+
+enum ItemKind {
+  PRODUCT
+  RAW_MATERIAL
+}
+
+model Supplier {
+  id        String       @id @default(cuid())
+  name      String
+  company   String?
+  phone     String?
+  email     String?
+  address   String?
+  gstNumber String?
+  notes     String?
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime?    @db.Timestamptz(3)
+
+  items     Item[]
+  movements StockMovement[]
+
+  @@index([name])
+}
+
+model Item {
+  id            String       @id @default(cuid())
+  kind          ItemKind
+  name          String
+  code          String       @unique // SKU / material code
+  category      String?
+  description   String?
+  unit          String // pcs, sq ft, bag, kg…
+  sellingPrice  Decimal?     @db.Decimal(12, 2) // products
+  purchasePrice Decimal?     @db.Decimal(12, 2)
+  /// Default low-stock threshold (each branch can override).
+  reorderLevel  Decimal      @default(0) @db.Decimal(14, 3)
+  supplierId    String?
+  supplier      Supplier?    @relation(fields: [supplierId], references: [id])
+  notes         String?
+  status        RecordStatus @default(ACTIVE)
+  createdById   String
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+  deletedAt     DateTime?    @db.Timestamptz(3)
+
+  images    ItemImage[]
+  stock     StockLevel[]
+  movements StockMovement[]
+
+  @@index([kind, name])
+  @@index([category])
+}
+
+model ItemImage {
+  id           String    @id @default(cuid())
+  itemId       String
+  item         Item      @relation(fields: [itemId], references: [id])
+  storageKey   String
+  mimeType     String
+  uploadedById String
+  removedAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([itemId])
+}
+
+/// Current quantity of an item at one branch. Never merged across branches.
+model StockLevel {
+  id           String   @id @default(cuid())
+  itemId       String
+  item         Item     @relation(fields: [itemId], references: [id])
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [id])
+  quantity     Decimal  @default(0) @db.Decimal(14, 3)
+  /// Branch-specific low-stock threshold (null = item default).
+  reorderLevel Decimal? @db.Decimal(14, 3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([itemId, branchId])
+  @@index([branchId])
+}
+
+enum StockMovementType {
+  IN // received / purchased
+  OUT // used / sold / issued to a work
+  ADJUSTMENT // stock count adjustment (set to counted quantity)
+  CORRECTION // manual correction of an earlier mistake
+  DAMAGED // written off
+  TRANSFER_OUT
+  TRANSFER_IN
+}
+
+model StockMovement {
+  id             String            @id @default(cuid())
+  number         String            @unique // STK-000001
+  itemId         String
+  item           Item              @relation(fields: [itemId], references: [id])
+  branchId       String
+  branch         Branch            @relation(fields: [branchId], references: [id])
+  type           StockMovementType
+  quantityBefore Decimal           @db.Decimal(14, 3)
+  quantityAfter  Decimal           @db.Decimal(14, 3)
+  change         Decimal           @db.Decimal(14, 3) // after − before
+  unitCost       Decimal?          @db.Decimal(12, 2)
+  reason         String
+  reference      String? // supplier bill no., etc.
+  supplierId     String?
+  supplier       Supplier?         @relation(fields: [supplierId], references: [id])
+  /// Material used on a work (job costing).
+  workId         String?
+  work           Work?             @relation(fields: [workId], references: [id])
+  /// Links the two halves of a branch transfer.
+  transferGroup  String?
+  userId         String
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([itemId, branchId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([workId])
+  @@index([transferGroup])
+}
+
+// ═════════════════════════════ PHASE 4 — COMMUNICATION ═════════════════════════════
+// In-app notifications are rows in Notification. External messages
+// (Email / SMS / WhatsApp) go through a transactional outbox: notify() writes
+// NotificationDelivery rows in the same transaction as the business change,
+// and a background worker sends them via the configured provider.
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED // e.g. recipient has no phone / email
+}
+
+/// One active provider per channel. Secrets are AES-256-GCM encrypted.
+model NotificationProvider {
+  channel     NotificationChannel @id
+  provider    String // log, smtp, resend, msg91, twilio, meta_whatsapp, twilio_whatsapp
+  enabled     Boolean             @default(false)
+  /// Non-secret settings (from address, sender id, template name…)
+  config      Json
+  /// Encrypted JSON of secret settings (API keys, passwords, tokens).
+  secretsEnc  String?
+  updatedById String?
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(3)
+}
+
+/// Editable message templates per event and channel. {variables} are filled at send time.
+model NotificationTemplate {
+  id             String              @id @default(cuid())
+  event          String
+  channel        NotificationChannel
+  enabled        Boolean             @default(true)
+  /// Also send to the work's customer (phone / email) for this event.
+  sendToCustomer Boolean             @default(false)
+  subject        String? // email only
+  body           String
+  updatedById    String?
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@unique([event, channel])
+}
+
+model NotificationDelivery {
+  id                String              @id @default(cuid())
+  event             String
+  channel           NotificationChannel
+  userId            String?
+  customerId        String?
+  recipientName     String?
+  to                String? // email / E.164 phone
+  subject           String?
+  body              String
+  status            DeliveryStatus      @default(QUEUED)
+  attempts          Int                 @default(0)
+  nextAttemptAt     DateTime            @default(now()) @db.Timestamptz(3)
+  provider          String?
+  providerMessageId String?
+  /// Sanitised provider response (no credentials).
+  providerResponse  String?
+  error             String?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+  sentAt            DateTime?           @db.Timestamptz(3)
+  deliveredAt       DateTime?           @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+  @@index([providerMessageId])
+  @@index([createdAt])
+  @@index([event])
+}
+
+// ═════════════════════════════ PHASE 5 — SUPPORT PORTAL ═════════════════════════════
+// Complaints and requests from staff, agents, workers (and later customers).
+// Tickets are never deleted; every status / priority / assignment change is
+// kept in SupportTicketEvent.
+
+enum TicketStatus {
+  OPEN
+  IN_REVIEW
+  IN_PROGRESS
+  WAITING_FOR_USER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model SupportCategory {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  active    Boolean         @default(true)
+  sortOrder Int             @default(0)
+  tickets   SupportTicket[]
+}
+
+model SupportTicket {
+  id             String          @id @default(cuid())
+  number         String          @unique // SUP-000001
+  title          String
+  description    String
+  categoryId     String
+  category       SupportCategory @relation(fields: [categoryId], references: [id])
+  priority       TicketPriority  @default(MEDIUM)
+  status         TicketStatus    @default(OPEN)
+  submittedById  String
+  /// Future customer portal: ticket raised by a customer.
+  customerId     String?
+  branchId       String?
+  workId         String?
+  assignedToId   String?
+  resolution     String?
+  resolvedAt     DateTime?       @db.Timestamptz(3)
+  closedAt       DateTime?       @db.Timestamptz(3)
+  closedById     String?
+  lastActivityAt DateTime        @default(now()) @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+
+  comments    SupportComment[]
+  attachments SupportAttachment[]
+  events      SupportTicketEvent[]
+
+  @@index([status, priority])
+  @@index([submittedById])
+  @@index([assignedToId])
+  @@index([branchId])
+  @@index([lastActivityAt])
+}
+
+model SupportComment {
+  id          String              @id @default(cuid())
+  ticketId    String
+  ticket      SupportTicket       @relation(fields: [ticketId], references: [id])
+  authorId    String
+  body        String
+  /// Internal notes are visible only to support managers.
+  isInternal  Boolean             @default(false)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  attachments SupportAttachment[]
+
+  @@index([ticketId])
+}
+
+model SupportAttachment {
+  id           String          @id @default(cuid())
+  ticketId     String
+  ticket       SupportTicket   @relation(fields: [ticketId], references: [id])
+  commentId    String?
+  comment      SupportComment? @relation(fields: [commentId], references: [id])
+  isInternal   Boolean         @default(false)
+  storageKey   String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([ticketId])
+}
+
+model SupportTicketEvent {
+  id        String        @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
+  action    String // created, status, priority, assigned, category, resolved, closed, reopened
+  fromValue String?
+  toValue   String?
+  note      String?
+  userId    String
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([ticketId])
+}
