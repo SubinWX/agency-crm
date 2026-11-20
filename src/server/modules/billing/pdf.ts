@@ -1,10 +1,11 @@
 /**
  * Invoice PDF (spec §25–26). Generated on demand from the stored invoice, so
  * it always reflects current payment status — a paid invoice carries a PAID
- * stamp, a cancelled one a CANCELLED stamp. Built-in PDF fonts lack the ₹
- * glyph, so amounts print as "Rs.".
+ * stamp, a cancelled one a CANCELLED stamp. Uses Noto Sans so amounts print
+ * with the ₹ sign (see lib/pdf-fonts).
  */
 import PDFDocument from "pdfkit";
+import { registerPdfFonts } from "../../lib/pdf-fonts";
 import { formatDateLabel, fromDbDate } from "../../lib/dates";
 import { storage } from "../../storage";
 import { formatINR, toPaise } from "./calc";
@@ -15,7 +16,8 @@ type Company = { name: string; address: string; phone: string; email: string; gs
 type CustomerSnap = { name: string; phone?: string | null; email?: string | null; address?: string | null; gstNumber?: string | null };
 
 const n = (p: number) => formatINR(p, "");
-const rs = (v: { toString(): string } | number) => formatINR(typeof v === "number" ? v : toPaise(v.toString()), "Rs. ");
+let CUR = "₹";
+const rs = (v: { toString(): string } | number) => formatINR(typeof v === "number" ? v : toPaise(v.toString()), CUR);
 
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
 const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
@@ -70,6 +72,8 @@ export async function renderInvoicePdf(inv: Inv): Promise<Buffer> {
   const chunks: Buffer[] = [];
   doc.on("data", (c: Buffer) => chunks.push(c));
   const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
+  const F = registerPdfFonts(doc);
+  CUR = F.currency;
 
   const L = 40;
   const W = doc.page.width - 80;
@@ -87,7 +91,7 @@ export async function renderInvoicePdf(inv: Inv): Promise<Buffer> {
   const ensure = (h: number) => {
     if (y + h > bottom()) newPage();
   };
-  const font = (bold: boolean, size: number, color: string = C.ink) => doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(size).fillColor(color);
+  const font = (bold: boolean, size: number, color: string = C.ink) => doc.font(bold ? F.bold : F.regular).fontSize(size).fillColor(color);
   const label = (text: string, x: number, yy: number, w: number) => font(true, 7.5, C.muted).text(text.toUpperCase(), x, yy, { width: w, characterSpacing: 0.6 });
 
   /** Bordered table with a dark header row, zebra rows and page breaks (header repeats). */
@@ -272,7 +276,7 @@ export async function renderInvoicePdf(inv: Inv): Promise<Buffer> {
     }
     const intra = inv.taxType === "INTRA_STATE";
     const cw = intra ? [36, (leftW - 36) / 4, (leftW - 36) / 4, (leftW - 36) / 4, (leftW - 36) / 4] : [36, (leftW - 36) / 3, (leftW - 36) / 3, (leftW - 36) / 3];
-    const heads = intra ? ["GST %", "Taxable (Rs.)", "CGST (Rs.)", "SGST (Rs.)", "Total tax (Rs.)"] : ["GST %", "Taxable (Rs.)", "IGST (Rs.)", "Total tax (Rs.)"];
+    const heads = intra ? ["GST %", `Taxable (${CUR.trim()})`, `CGST (${CUR.trim()})`, `SGST (${CUR.trim()})`, `Total tax (${CUR.trim()})`] : ["GST %", `Taxable (${CUR.trim()})`, `IGST (${CUR.trim()})`, `Total tax (${CUR.trim()})`];
     table(
       heads.map((h, i) => ({ h, w: cw[i], a: i === 0 ? "center" : "right" })),
       [...byRate.entries()].sort((a, b) => a[0] - b[0]).map(([r, v]) => {
@@ -335,9 +339,9 @@ export async function renderInvoicePdf(inv: Inv): Promise<Buffer> {
     if (paid) {
       doc.lineWidth(4).lineCap("round").lineJoin("round").moveTo(cx - 9, cy - 23).lineTo(cx - 2, cy - 16).lineTo(cx + 11, cy - 30).strokeColor(color).stroke();
     }
-    doc.fillColor(color).font("Helvetica-Bold").fontSize(paid ? 24 : 13).text(paid ? "PAID" : "CANCELLED", cx - 50, cy - (paid ? 9 : 5), { width: 100, align: "center", characterSpacing: 1 });
-    if (sub) doc.font("Helvetica-Bold").fontSize(7).text(sub.toUpperCase(), cx - 50, cy + 17, { width: 100, align: "center" });
-    if (!paid && inv.cancelReason) doc.font("Helvetica").fontSize(7).text(inv.cancelReason.slice(0, 30), cx - 40, cy + 12, { width: 80, align: "center" });
+    doc.fillColor(color).font(F.bold).fontSize(paid ? 24 : 13).text(paid ? "PAID" : "CANCELLED", cx - 50, cy - (paid ? 9 : 5), { width: 100, align: "center", characterSpacing: 1 });
+    if (sub) doc.font(F.bold).fontSize(7).text(sub.toUpperCase(), cx - 50, cy + 17, { width: 100, align: "center" });
+    if (!paid && inv.cancelReason) doc.font(F.regular).fontSize(7).text(inv.cancelReason.slice(0, 30), cx - 40, cy + 12, { width: 80, align: "center" });
     doc.restore();
   }
 

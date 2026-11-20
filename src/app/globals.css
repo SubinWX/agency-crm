@@ -72,3 +72,6 @@ body {
   text-shadow: none;
 }
 .driver-popover.crm-tour .driver-popover-footer .driver-popover-next-btn { @apply border-blue-600 bg-blue-600 text-white; }
+
+/* Walk-through progress bar (auto-play) */
+@keyframes walkthrough { from { width: 0; } to { width: 100%; } }

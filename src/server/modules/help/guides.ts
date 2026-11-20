@@ -224,6 +224,48 @@ export const GUIDES: Guide[] = [
 
   // ───────────── Agent ─────────────
   {
+    id: "products-website",
+    portal: "ADMIN",
+    topic: "Inventory",
+    title: "Add products and show them on your website",
+    summary: "Photos, price, and one tick to publish.",
+    perm: "inventory.manage",
+    steps: [
+      "Go to Inventory → Products and press + Add product.",
+      "Fill in the name, SKU, category, unit and selling price, and add photos. In the Website box, tick “Show this product on the website”.",
+      "Save. The product page shows a Website card with the public product page and the data feed for your website developer.",
+      "Your public catalogue lists every published product with photos, price and an Enquire on WhatsApp button.",
+    ],
+    tips: ["Untick “Show on website” to hide a product again — its photos stop being public too."],
+    links: [{ label: "Products", href: "/admin/inventory/products" }, { label: "Public catalogue", href: "/products" }],
+  },
+  {
+    id: "support-customize",
+    portal: "ADMIN",
+    topic: "Support",
+    title: "Customise the support page",
+    summary: "Banner, header button, footer and social links.",
+    perm: "branding.manage",
+    steps: [
+      "Support → Customise page. Set the top banner: photo, headline, text and button.",
+      "Fill in the footer text, support email, phone, address and your social media links, then press Save support page.",
+      "Everyone who opens Support now sees your banner, logo header and footer.",
+    ],
+    links: [{ label: "Customise page", href: "/support/customize" }],
+  },
+  {
+    id: "time-zone",
+    portal: "ADMIN",
+    topic: "Settings",
+    title: "Set the time zone and clock",
+    summary: "Decides what “today” is, everywhere.",
+    perm: "settings.manage",
+    steps: [
+      "Administration → Settings → Date & time. Pick your time zone (or “Use server system time”) and 12- or 24-hour clock, then save.",
+      "The clock in the top bar, works for “today”, reports and invoices all follow this time zone.",
+    ],
+  },
+  {
     id: "agent-new",
     portal: "AGENT",
     topic: "Works",

@@ -270,6 +270,8 @@ export async function listInvoices(actor: Actor, f: { q?: string; status?: strin
     and.push({ OR: [{ number: { contains: q, mode: "insensitive" } }, { customer: { name: { contains: q, mode: "insensitive" } } }, { customer: { phone: { contains: q } } }, { work: { reference: { contains: q, mode: "insensitive" } } }] });
   }
   if (f.status && ["ISSUED", "PARTIALLY_PAID", "PAID", "CANCELLED"].includes(f.status)) and.push({ status: f.status as "PAID" });
+  // Overdue: unpaid (fully or partly) and past the due date.
+  if (f.status === "OVERDUE") and.push({ status: { in: ["ISSUED", "PARTIALLY_PAID"] }, dueDate: { lt: toDbDate(businessToday()) } });
   const where = { AND: and };
   const [items, total, sums] = await Promise.all([
     prisma.invoice.findMany({

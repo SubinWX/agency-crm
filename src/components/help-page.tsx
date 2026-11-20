@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { GUIDES } from "@/server/modules/help/guides";
 import { can, type Actor } from "@/server/rbac/actor";
+import { WALKTHROUGHS } from "@/server/modules/help/walkthroughs.generated";
 import { TourButton } from "./tour-button";
+import { Walkthrough } from "./walkthrough";
 import { PageHeader } from "./ui";
 
 /** Help & tutorials: role-specific step-by-step guides + the guided tour. */
@@ -32,21 +34,21 @@ export function HelpPage({ actor, q }: { actor: Actor; q?: string }) {
               {guides.filter((g) => g.topic === t).map((g) => (
                 <details key={g.id} id={g.id} className="card group open:shadow-md" open={guides.length <= 3}>
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
-                    <span>
-                      <span className="font-semibold text-slate-900">{g.title}</span>
-                      <span className="block text-sm text-slate-500">{g.summary}</span>
+                    <span className="flex min-w-0 items-center gap-4">
+                      {WALKTHROUGHS[g.id]?.[0] && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={WALKTHROUGHS[g.id][0].src} alt="" loading="lazy" className="hidden h-14 w-24 shrink-0 rounded-md border border-slate-200 object-cover object-top sm:block" />
+                      )}
+                      <span className="min-w-0">
+                        <span className="font-semibold text-slate-900">{g.title}</span>
+                        <span className="block text-sm text-slate-500">{g.summary}</span>
+                        {(WALKTHROUGHS[g.id]?.length ?? 0) > 0 && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">▶ Walk-through · {WALKTHROUGHS[g.id].length} pictures</span>}
+                      </span>
                     </span>
                     <span className="text-slate-400 transition group-open:rotate-180">▾</span>
                   </summary>
                   <div className="border-t border-slate-100 px-5 py-4">
-                    <ol className="space-y-2">
-                      {g.steps.map((s, i) => (
-                        <li key={i} className="flex gap-3 text-sm text-slate-700">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">{i + 1}</span>
-                          <span className="pt-0.5">{s}</span>
-                        </li>
-                      ))}
-                    </ol>
+                    <Walkthrough title={g.title} steps={g.steps} shots={WALKTHROUGHS[g.id] ?? []} />
                     {g.tips && (
                       <ul className="mt-4 space-y-1 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
                         {g.tips.map((tip, i) => <li key={i}>💡 {tip}</li>)}

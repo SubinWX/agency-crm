@@ -166,6 +166,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
               {item.showOnWebsite ? (
                 <div className="space-y-2 text-sm">
                   <p className="flex items-center gap-2 font-medium text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Shown on the website</p>
+                  <a href={`/products/${item.slug}`} target="_blank" className="block text-blue-700">Public product page ↗</a>
                   <p className="text-xs text-slate-500">Product data for the website (JSON):</p>
                   <a href={`/api/public/products/${item.slug}`} target="_blank" className="block break-all rounded bg-slate-50 px-2 py-1.5 font-mono text-xs text-blue-700">/api/public/products/{item.slug}</a>
                   {item.websiteUrl && <a href={item.websiteUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-blue-700">Product page ↗</a>}

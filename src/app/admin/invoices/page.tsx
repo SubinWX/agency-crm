@@ -29,6 +29,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
           <option value="">All statuses</option>
           <option value="ISSUED">Unpaid</option>
           <option value="PARTIALLY_PAID">Partially paid</option>
+          <option value="OVERDUE">Overdue</option>
           <option value="PAID">Paid</option>
           <option value="CANCELLED">Cancelled</option>
         </select>

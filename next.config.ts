@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname),
   // pdfkit reads its built-in font files from disk at runtime.
   serverExternalPackages: ["pdfkit"],
+  // Invoice / report PDFs use these fonts (₹ sign) — ship them with the server build.
+  outputFileTracingIncludes: { "/**": ["./assets/fonts/**/*"] },
   experimental: {
     // Up to 10 photos × 10 MB per work / completion form.
     serverActions: { bodySizeLimit: "60mb" },

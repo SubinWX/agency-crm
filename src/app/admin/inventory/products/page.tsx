@@ -24,7 +24,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         subtitle={`${products.length} product${products.length === 1 ? "" : "s"} · ${onSite} on the website`}
         actions={
           <>
-            <a href="/api/public/products" target="_blank" className="btn-secondary"><Globe className="h-4 w-4" /> Website feed</a>
+            <a href="/products" target="_blank" className="btn-secondary"><Globe className="h-4 w-4" /> Public catalogue ↗</a>
+            <a href="/api/public/products" target="_blank" className="btn-secondary">Data feed</a>
             {can(actor, "inventory.manage") && <Link href="/admin/inventory/items/new?kind=PRODUCT" className="btn-primary">+ Add product</Link>}
           </>
         }

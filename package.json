@@ -15,7 +15,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "worker": "tsx scripts/notification-worker.ts"
+    "worker": "tsx scripts/notification-worker.ts",
+    "tutorials:demo": "tsx scripts/tutorials/demo-data.ts",
+    "tutorials:capture": "tsx scripts/tutorials/capture.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -46,6 +48,7 @@
     "eslint-config-next": "^15.5.29",
     "postcss": "^8",
     "prisma": "^6.19.3",
+    "puppeteer-core": "^23.11.1",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.23.15",
     "typescript": "^5",
