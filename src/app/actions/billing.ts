@@ -83,8 +83,8 @@ export async function voidPaymentAction(paymentId: string, _p: R | null, fd: For
 }
 
 export async function createExpenseAction(_p: R | null, fd: FormData): Promise<R> {
-  return runAction(async () => {
-    await createExpense(await actorOrThrow(), {
+  const res = await runAction(async () => {
+    return createExpense(await actorOrThrow(), {
       title: s(fd, "title") ?? "",
       amount: s(fd, "amount") ?? "",
       spentOn: s(fd, "spentOn") ?? "",
@@ -94,8 +94,10 @@ export async function createExpenseAction(_p: R | null, fd: FormData): Promise<R
       description: s(fd, "description"),
       receipt: file(fd, "receipt"),
     });
-    revalidatePath("/admin/expenses");
   }, "Expense recorded.");
+  if (!res.ok) return res;
+  revalidatePath("/admin/expenses");
+  redirect("/admin/expenses?created=1");
 }
 
 export async function voidExpenseAction(id: string, _p: R | null, fd: FormData): Promise<R> {

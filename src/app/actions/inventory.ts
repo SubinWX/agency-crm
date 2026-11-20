@@ -83,8 +83,8 @@ export async function reorderLevelAction(itemId: string, branchId: string, _p: R
 }
 
 export async function saveSupplierAction(id: string | null, _p: R | null, fd: FormData): Promise<R> {
-  return runAction(async () => {
-    await saveSupplier(
+  const res = await runAction(async () => {
+    return saveSupplier(
       await actorOrThrow(),
       {
         name: s(fd, "name") ?? "",
@@ -98,8 +98,10 @@ export async function saveSupplierAction(id: string | null, _p: R | null, fd: Fo
       },
       id ?? undefined,
     );
-    revalidatePath("/admin/suppliers");
   }, "Supplier saved.");
+  if (res.ok) revalidatePath("/admin/suppliers");
+  if (res.ok && !id) redirect("/admin/suppliers?created=1");
+  return res;
 }
 
 /** Issue stock from the work's branch to the work (records cost for job costing). */

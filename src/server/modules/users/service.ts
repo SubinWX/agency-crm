@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prisma, transaction } from "../../db";
+import { prisma, transaction, type Tx } from "../../db";
 import { audit } from "../../lib/audit";
 import { forbidden, invalid, notFound, parseInput } from "../../lib/errors";
 import { hashPassword, passwordPolicyError } from "../../auth/password";
@@ -14,6 +14,14 @@ const userInput = z.object({
   branchIds: z.array(z.string()).default([]),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
   password: z.string().optional(),
+  /** Optional profile details (location, joining date, emergency contact). */
+  profile: z
+    .object({
+      address: z.string().trim().max(500).optional(),
+      joiningDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid joining date").or(z.literal("")).optional(),
+      emergencyContact: z.string().trim().max(200).optional(),
+    })
+    .optional(),
 });
 export type UserInput = z.input<typeof userInput>;
 
@@ -89,6 +97,7 @@ export async function saveUser(actor: Actor, input: UserInput, id?: string) {
         },
       });
       if (d.status === "INACTIVE" || d.password) await tx.session.deleteMany({ where: { userId: id } });
+      if (d.profile) await saveProfile(tx, id, d.profile);
       await audit(tx, actor, {
         action: before.roleId !== d.roleId ? "user.role_change" : "user.update",
         entityType: "User",
@@ -109,9 +118,19 @@ export async function saveUser(actor: Actor, input: UserInput, id?: string) {
         branches: { create: d.branchIds.map((branchId) => ({ branchId })) },
       },
     });
-    await audit(tx, actor, { action: "user.create", entityType: "User", entityId: user.id, after: { name: d.name, email: d.email, roleId: d.roleId, branchIds: d.branchIds } });
+    if (d.profile) await saveProfile(tx, user.id, d.profile);
+    await audit(tx, actor, { action: "user.create", entityType: "User", entityId: user.id, after: { name: d.name, email: d.email, roleId: d.roleId, branchIds: d.branchIds, profile: d.profile ?? null } });
     return user;
   });
+}
+
+async function saveProfile(tx: Tx, userId: string, p: { address?: string; joiningDate?: string; emergencyContact?: string }) {
+  const data = {
+    address: p.address || null,
+    joiningDate: p.joiningDate ? new Date(`${p.joiningDate}T00:00:00.000Z`) : null,
+    emergencyContact: p.emergencyContact || null,
+  };
+  await tx.staffProfile.upsert({ where: { userId }, create: { userId, ...data }, update: data });
 }
 
 /** Super Admin configures which permissions each role holds. */

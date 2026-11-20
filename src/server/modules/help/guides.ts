@@ -1,0 +1,328 @@
+/**
+ * Step-by-step tutorials shown in Help & tutorials. Office guides are only
+ * listed for users who have the permission the task needs.
+ */
+import type { Portal } from "@prisma/client";
+import type { PermissionKey } from "../../rbac/permissions";
+
+export interface Guide {
+  id: string;
+  portal: Portal;
+  topic: string;
+  title: string;
+  summary: string;
+  perm?: PermissionKey;
+  steps: string[];
+  tips?: string[];
+  links?: { label: string; href: string }[];
+}
+
+export const GUIDES: Guide[] = [
+  // ───────────── Office ─────────────
+  {
+    id: "flow",
+    portal: "ADMIN",
+    topic: "Getting started",
+    title: "The daily flow: from a new work to payment",
+    summary: "How a job moves through the system, end to end.",
+    steps: [
+      "A work is added — by an agent from their phone, or by the office (Works → Add work). The date must have a free slot.",
+      "The office assigns one or more workers (open the work → Workers → Assign selected).",
+      "The worker opens the job, presses Start work, then uploads completion photos and presses Mark completed.",
+      "The work now waits in Works → Pending approval. Check the photos, then Approve or Request correction (the reason goes to the worker).",
+      "Approved works get commission lines for the agent and workers automatically.",
+      "Create the invoice from the work page (Billing → Create invoice), then record payments. When fully paid, the invoice PDF shows a PAID stamp and the work becomes Paid.",
+    ],
+    tips: ["Every change is kept in the work's Activity timeline and in the Audit log."],
+    links: [{ label: "Pending approval", href: "/admin/approvals" }, { label: "Calendar", href: "/admin/calendar" }],
+  },
+  {
+    id: "add-work",
+    portal: "ADMIN",
+    topic: "Works",
+    title: "Add a work (and why a date can be full)",
+    summary: "Customer → details → date → save.",
+    perm: "works.create",
+    steps: [
+      "Go to Works → Add work.",
+      "Choose an existing customer or add a new one.",
+      "Fill in the work details: branch, title, location (or tap Use my current location), custom fields like width/height, and photos.",
+      "Pick a date on the calendar. Green = free, amber = few left, red = full, grey = closed.",
+      "Optionally tick “Create the invoice right after saving”, then press Submit work.",
+    ],
+    tips: [
+      "Capacity is shared by all branches. If a date fills up while you are typing, you'll see the next free dates — tap one to choose it.",
+      "Nobody, not even Super Admin, can book above capacity. Change the capacity itself in Settings if needed.",
+    ],
+    links: [{ label: "Add work", href: "/admin/works/new" }],
+  },
+  {
+    id: "assign",
+    portal: "ADMIN",
+    topic: "Works",
+    title: "Assign or remove workers",
+    summary: "One work can have several workers.",
+    perm: "works.assign_workers",
+    steps: [
+      "Open the work (Works → All works → click the WRK number).",
+      "In the Workers card, tick the workers to add and press Assign selected. Only workers of that branch are listed.",
+      "To remove someone, click Remove under their name and give a reason.",
+    ],
+    tips: ["Assigned workers get an alert (and WhatsApp/SMS if switched on)."],
+  },
+  {
+    id: "approve",
+    portal: "ADMIN",
+    topic: "Works",
+    title: "Approve or send back a completed work",
+    summary: "Check the completion photos before approving.",
+    perm: "works.approve",
+    steps: [
+      "Open Works → Pending approval and click a work.",
+      "Look at the Completion photos (click to zoom), the worker's message and description.",
+      "Press Approve, or type what needs fixing and press Request correction.",
+    ],
+    tips: ["A correction sends the work back to In progress and notifies the workers with your reason."],
+    links: [{ label: "Pending approval", href: "/admin/approvals" }],
+  },
+  {
+    id: "reschedule",
+    portal: "ADMIN",
+    topic: "Works",
+    title: "Change a work's date",
+    summary: "Move a work to another free day.",
+    perm: "works.change_date",
+    steps: ["Open the work.", "In Change date, pick a new free date on the calendar.", "Enter the reason and press Move work."],
+    tips: ["The worker, agent (and optionally the customer) are notified. The old and new dates are kept in the history."],
+  },
+  {
+    id: "invoice",
+    portal: "ADMIN",
+    topic: "Billing",
+    title: "Create an invoice and record a payment",
+    summary: "GST is calculated for you; the PDF shows PAID when settled.",
+    perm: "invoices.create",
+    steps: [
+      "Open the work → Billing → Create invoice.",
+      "Add lines (item, quantity, rate, discount, GST %). Totals update as you type.",
+      "Press Create invoice. Use Open PDF / Print or Download to share it.",
+      "To record money received, enter the amount, date and method (GPay/UPI, cash, bank, card) and press Save payment. UPI and bank transfers need the reference / UTR.",
+    ],
+    tips: [
+      "An invoice can't be edited once it has a payment — void the payment first (with a reason).",
+      "You can't record more than the balance due.",
+    ],
+    links: [{ label: "Invoices", href: "/admin/invoices" }],
+  },
+  {
+    id: "commission",
+    portal: "ADMIN",
+    topic: "Billing",
+    title: "Approve and pay commission",
+    summary: "Agent and worker commission is created when a work is approved.",
+    perm: "commissions.manage",
+    steps: [
+      "Go to Finance → Commissions.",
+      "Tick the lines to pay, choose Approve for payout, press Apply.",
+      "After paying, tick them again, choose Mark as paid, add the payout reference and press Apply.",
+    ],
+    tips: ["Default % and personal rates are under Commission rates. Changes only affect works approved later."],
+    links: [{ label: "Commissions", href: "/admin/commissions" }, { label: "Commission rates", href: "/admin/commissions/rates" }],
+  },
+  {
+    id: "people",
+    portal: "ADMIN",
+    topic: "People",
+    title: "Add an agent or a worker",
+    summary: "Each gets their own login and branch.",
+    perm: "users.manage",
+    steps: [
+      "Go to Agents / Brokers → Add agent, or Workers → Add worker.",
+      "Enter name, phone (used for WhatsApp/SMS), email and location.",
+      "Tick the branch(es). Workers can only be assigned to works in these branches.",
+      "Set a password and press Add. Share the email and password with them — agents sign in at /agent/login, workers at /worker/login.",
+    ],
+    links: [{ label: "Add agent", href: "/admin/agents/new" }, { label: "Add worker", href: "/admin/workers/new" }],
+  },
+  {
+    id: "capacity",
+    portal: "ADMIN",
+    topic: "Settings",
+    title: "Change daily capacity or close a date",
+    summary: "Control how many works can be booked per day.",
+    perm: "capacity.manage",
+    steps: [
+      "Settings → Daily work capacity: enter the new number and a reason, press Update. The change is logged.",
+      "To close a holiday: Calendar → Block / unblock a date → choose the date, enter the reason, press Update calendar.",
+    ],
+    tips: ["The “slot full” message people see can be edited in Settings → Full-slot & closed-date messages."],
+    links: [{ label: "Settings", href: "/admin/settings" }, { label: "Calendar", href: "/admin/calendar" }],
+  },
+  {
+    id: "stock",
+    portal: "ADMIN",
+    topic: "Inventory",
+    title: "Stock in, transfers and materials used on a work",
+    summary: "Each branch keeps its own stock.",
+    perm: "inventory.edit_stock",
+    steps: [
+      "Inventory → Stock → click an item.",
+      "In Change stock choose the branch and type: Stock in, Stock out, Damaged, Adjust to count, Correction or Transfer to branch.",
+      "Enter the quantity and reason, then Save. Every change appears in the stock history.",
+      "To charge material to a job, open the work → Materials used → choose the item and quantity → Use. Its cost shows in Job costing.",
+    ],
+  },
+  {
+    id: "notify",
+    portal: "ADMIN",
+    topic: "Settings",
+    title: "Turn on WhatsApp, SMS and Email",
+    summary: "Connect your provider once you have a subscription.",
+    perm: "notifications.manage",
+    steps: [
+      "Administration → Notifications → Providers.",
+      "For each channel, choose the provider (e.g. WhatsApp Cloud API, MSG91, SMTP) and enter the keys it gives you.",
+      "Tick Channel on and Save. Use Send test to check.",
+      "Edit message wording under Templates. Check sent / delivered / failed messages in the Delivery log.",
+    ],
+    tips: ["Use Test mode first — it logs messages without sending them.", "Keys are encrypted and never shown again."],
+    links: [{ label: "Notifications", href: "/admin/notifications" }],
+  },
+  {
+    id: "portal-access",
+    portal: "ADMIN",
+    topic: "Customers",
+    title: "Give a customer access to the customer portal",
+    summary: "Customers can see their works, invoices and payments.",
+    perm: "customers.edit",
+    steps: ["Customers → open the customer.", "In Customer portal access, enter their email and a password and press Create portal login.", "Tell the customer to sign in at /portal/login."],
+  },
+  {
+    id: "reports",
+    portal: "ADMIN",
+    topic: "Insights",
+    title: "Reports and Excel / PDF export",
+    summary: "14 reports with filters.",
+    perm: "reports.view",
+    steps: ["Insights → Reports and pick a report on the left.", "Set the date range and filters, press Run report.", "Press Excel (CSV) or PDF to download exactly what you see."],
+    links: [{ label: "Reports", href: "/admin/reports" }, { label: "Analytics", href: "/admin/analytics" }],
+  },
+  {
+    id: "support-admin",
+    portal: "ADMIN",
+    topic: "Support",
+    title: "Handle a support ticket",
+    summary: "Reply, assign, resolve and close.",
+    perm: "support.manage",
+    steps: [
+      "Support → Support tickets and open a ticket.",
+      "Reply to the requester, or tick Internal note for a staff-only note.",
+      "In Manage ticket set status, priority and who it's assigned to.",
+      "When done, choose Resolved and write the resolution. Close it (or the requester can confirm and close).",
+    ],
+  },
+
+  // ───────────── Agent ─────────────
+  {
+    id: "agent-new",
+    portal: "AGENT",
+    topic: "Works",
+    title: "Add a new work",
+    summary: "Customer → details → date → submit.",
+    steps: [
+      "Tap New work.",
+      "Choose an existing customer or add a new one (name and phone).",
+      "Fill in the details and measurements, add photos, and tap Use my current location at the site.",
+      "Pick a free date (green). Full dates are red and can't be chosen.",
+      "Tap Submit work. You'll get alerts when it is scheduled, approved and paid.",
+    ],
+    tips: ["If a date fills up while you are entering details, the app shows the next free dates — tap one."],
+    links: [{ label: "New work", href: "/agent/works/new" }],
+  },
+  {
+    id: "agent-edit",
+    portal: "AGENT",
+    topic: "Works",
+    title: "Update location or photos",
+    summary: "Changes need a reason; old photos are kept.",
+    steps: ["Open the work from My works.", "Use Edit details to fix the location or details — enter the reason and save.", "To change a photo, open Replace or remove image, choose the new photo and give a reason."],
+    tips: ["Customer name and phone can only be changed by the office."],
+  },
+  {
+    id: "agent-money",
+    portal: "AGENT",
+    topic: "Earnings",
+    title: "Commission and score",
+    summary: "See what you earn and how you're doing.",
+    steps: ["My commission shows each approved work, the % and whether it's pending or paid.", "My score shows your status (Gold/Silver/Bronze) for the last 90 days."],
+    links: [{ label: "My commission", href: "/agent/commissions" }, { label: "My score", href: "/agent/score" }],
+  },
+  {
+    id: "agent-support",
+    portal: "AGENT",
+    topic: "Help",
+    title: "Raise a complaint or request",
+    summary: "We reply in the Support portal.",
+    steps: ["Open Support → New request.", "Choose a category, write what happened, attach photos if useful, and submit.", "You'll get an alert when someone replies."],
+    links: [{ label: "New request", href: "/support/new" }],
+  },
+
+  // ───────────── Worker ─────────────
+  {
+    id: "worker-day",
+    portal: "WORKER",
+    topic: "Jobs",
+    title: "See your jobs",
+    summary: "Today first; any day with the arrows.",
+    steps: ["My works shows today's jobs.", "Use ‹ › or pick a date to see other days.", "Tap a job for the address (Open in Maps), customer phone and details."],
+  },
+  {
+    id: "worker-complete",
+    portal: "WORKER",
+    topic: "Jobs",
+    title: "Complete a job with photos",
+    summary: "The office approves it after you finish.",
+    steps: [
+      "Open the job and tap Start work when you begin.",
+      "When finished, tap Completion photos — take photos with the camera or choose from the gallery (up to 10).",
+      "Write a short message and what was done, then tap Mark completed.",
+    ],
+    tips: ["If the office asks for a correction, the job comes back with their note at the top. Fix it and mark completed again."],
+  },
+  {
+    id: "worker-support",
+    portal: "WORKER",
+    topic: "Help",
+    title: "Report a problem",
+    summary: "Equipment, a job or the app.",
+    steps: ["Open Support → New request.", "Describe the problem, add a photo, submit."],
+    links: [{ label: "New request", href: "/support/new" }],
+  },
+
+  // ───────────── Customer ─────────────
+  {
+    id: "customer-works",
+    portal: "CUSTOMER",
+    topic: "My account",
+    title: "Follow your works",
+    summary: "Status, date and completion photos.",
+    steps: ["My works lists each work with its date and status.", "Open a work to see details and, once completed, the completion photos."],
+  },
+  {
+    id: "customer-invoices",
+    portal: "CUSTOMER",
+    topic: "My account",
+    title: "Invoices and payments",
+    summary: "Download PDFs and see what's due.",
+    steps: ["Invoices shows each invoice with the balance due.", "Tap PDF to download or print. Paid invoices carry a PAID stamp.", "Payments lists what we have received."],
+  },
+  {
+    id: "customer-help",
+    portal: "CUSTOMER",
+    topic: "Help",
+    title: "Get help",
+    summary: "Raise a request about a work or invoice.",
+    steps: ["Open Help & support → New request.", "Choose a category, mention the work number (WRK-…), describe the issue and submit."],
+    links: [{ label: "New request", href: "/support/new" }],
+  },
+];

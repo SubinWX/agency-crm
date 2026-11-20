@@ -6,19 +6,26 @@ export const dynamic = "force-dynamic";
 
 export default async function AgentLayout({ children }: { children: React.ReactNode }) {
   const actor = await requirePortal("AGENT");
+  const commission = can(actor, "commissions.view_own");
   return (
     <AppShell
       actor={actor}
-      portalLabel="Agent"
-      notificationsHref="/agent/alerts"
-      bottomNav
+      roleLabel="Agent"
+      alertsHref="/agent/alerts"
+      accountHref="/agent/account"
       nav={[
-        { href: "/agent", label: "My works", exact: true },
-        { href: "/agent/works/new", label: "New work" },
+        { href: "/agent", label: "My works", icon: "works", exact: true },
+        { href: "/agent/works/new", label: "New work", icon: "add" },
+        { href: "/agent/calendar", label: "Availability", icon: "calendar" },
+        ...(commission ? [{ href: "/agent/commissions", label: "My commission", icon: "commission" as const }] : []),
+        { href: "/agent/score", label: "My score", icon: "score" },
+        { href: "/support", label: "Support", icon: "support" },
+      ]}
+      bottomNav={[
+        { href: "/agent", label: "Works", exact: true },
+        { href: "/agent/works/new", label: "New" },
         { href: "/agent/calendar", label: "Calendar" },
         { href: "/agent/score", label: "Score" },
-        ...(can(actor, "commissions.view_own") ? [{ href: "/agent/commissions", label: "Commission" }] : []),
-        { href: "/support", label: "Support" },
       ]}
     >
       {children}

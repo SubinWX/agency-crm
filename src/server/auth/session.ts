@@ -137,3 +137,10 @@ export async function requireUser(): Promise<Actor> {
   if (!actor) redirect("/");
   return actor;
 }
+
+/** The current session's id (to keep it when signing out other devices). */
+export async function currentSessionId(): Promise<string | undefined> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  if (!token) return undefined;
+  return (await prisma.session.findUnique({ where: { tokenHash: sha256(token) }, select: { id: true } }))?.id;
+}

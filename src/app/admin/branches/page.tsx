@@ -1,48 +1,29 @@
-import { saveBranchAction } from "@/app/actions/admin";
-import { ActionForm, SubmitButton } from "@/components/action-form";
-import { Card, PageHeader } from "@/components/ui";
+import Link from "next/link";
+import { PageHeader } from "@/components/ui";
 import { requirePagePermission } from "@/server/auth/session";
 import { listBranchesAdmin } from "@/server/modules/branches/service";
 
 export const metadata = { title: "Branches" };
 
-export default async function BranchesPage({ searchParams }: { searchParams: Promise<{ edit?: string }> }) {
+export default async function BranchesPage({ searchParams }: { searchParams: Promise<{ created?: string }> }) {
   const actor = await requirePagePermission("ADMIN", "branches.manage");
-  const { edit } = await searchParams;
+  const { created } = await searchParams;
   const branches = await listBranchesAdmin(actor);
-  const editing = edit ? branches.find((b) => b.id === edit) : undefined;
-  const showForm = editing || actor.isSuperAdmin;
   return (
     <>
-      <PageHeader title="Branches" subtitle="Daily capacity is company-wide; inventory and staff are per branch." />
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="grid gap-3 sm:grid-cols-2 lg:col-span-2">
-          {branches.map((b) => (
-            <div key={b.id} className="card p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold">{b.name} <span className="text-xs font-normal text-slate-500">{b.code}</span></p>
-                  <p className="text-sm text-slate-500">{b.address}</p>
-                </div>
-                <a className="text-sm text-blue-700" href={`?edit=${b.id}`}>Edit</a>
-              </div>
-              <p className="mt-3 text-xs text-slate-500">{b._count.works} works · {b._count.users} users · {b.status.toLowerCase()}</p>
+      {created && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Branch added.</div>}
+      <PageHeader title="Branches" subtitle="Daily capacity is company-wide; inventory and staff are per branch." actions={actor.isSuperAdmin ? <Link href="/admin/branches/new" className="btn-primary">+ Add branch</Link> : null} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {branches.map((b) => (
+          <Link key={b.id} href={`/admin/branches/${b.id}`} className="card p-5 transition hover:border-blue-300">
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold">{b.name}</p>
+              <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{b.code}</span>
             </div>
-          ))}
-        </div>
-        {showForm && (
-          <Card title={editing ? `Edit ${editing.name}` : "Add branch"}>
-            <ActionForm key={editing?.id ?? "new"} action={saveBranchAction.bind(null, editing?.id ?? null)} resetOnSuccess={!editing}>
-              <div><label className="label">Name *</label><input name="name" required defaultValue={editing?.name} className="input" /></div>
-              <div><label className="label">Code *</label><input name="code" required defaultValue={editing?.code} className="input uppercase" /></div>
-              <div><label className="label">Address</label><input name="address" defaultValue={editing?.address ?? ""} className="input" /></div>
-              <div><label className="label">Phone</label><input name="phone" defaultValue={editing?.phone ?? ""} className="input" /></div>
-              <div><label className="label">Email</label><input name="email" type="email" defaultValue={editing?.email ?? ""} className="input" /></div>
-              <div><label className="label">Status</label><select name="status" defaultValue={editing?.status ?? "ACTIVE"} className="input"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
-              <SubmitButton>{editing ? "Save" : "Add branch"}</SubmitButton>
-            </ActionForm>
-          </Card>
-        )}
+            <p className="mt-1 text-sm text-slate-500">{b.address ?? "No address"}</p>
+            <p className="mt-4 text-xs text-slate-500">{b._count.works} works · {b._count.users} users · {b.status === "ACTIVE" ? "Active" : "Inactive"}</p>
+          </Link>
+        ))}
       </div>
     </>
   );

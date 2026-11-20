@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { actorOrThrow, getActor } from "@/server/auth/session";
 import { transaction } from "@/server/db";
 import { runAction, type ActionResult } from "@/server/lib/errors";
@@ -94,10 +95,10 @@ const customerFromForm = (fd: FormData) => ({
 });
 
 export async function createCustomerAction(_p: R | null, fd: FormData): Promise<R> {
-  return runAction(async () => {
-    await createCustomer(await actorOrThrow(), customerFromForm(fd));
-    revalidatePath("/admin/customers");
-  }, "Customer added.");
+  const res = await runAction(async () => createCustomer(await actorOrThrow(), customerFromForm(fd)));
+  if (!res.ok) return res;
+  revalidatePath("/admin/customers");
+  redirect(`/admin/customers/${(res.data as { id: string }).id}?created=1`);
 }
 
 export async function updateCustomerAction(id: string, _p: R | null, fd: FormData): Promise<R> {
@@ -108,15 +109,15 @@ export async function updateCustomerAction(id: string, _p: R | null, fd: FormDat
 }
 
 export async function archiveCustomerAction(id: string, _p: R | null, fd: FormData): Promise<R> {
-  return runAction(async () => {
-    await archiveCustomer(await actorOrThrow(), id, s(fd, "reason") ?? "");
-    revalidatePath("/admin/customers");
-  }, "Customer archived.");
+  const res = await runAction(async () => archiveCustomer(await actorOrThrow(), id, s(fd, "reason") ?? ""));
+  if (!res.ok) return res;
+  revalidatePath("/admin/customers");
+  redirect("/admin/customers?archived=1");
 }
 
 export async function saveUserAction(id: string | null, _p: R | null, fd: FormData): Promise<R> {
-  return runAction(async () => {
-    await saveUser(
+  const res = await runAction(async () => {
+    return saveUser(
       await actorOrThrow(),
       {
         name: s(fd, "name") ?? "",
@@ -129,8 +130,10 @@ export async function saveUserAction(id: string | null, _p: R | null, fd: FormDa
       },
       id ?? undefined,
     );
-    revalidatePath("/admin/users");
   }, "User saved.");
+  if (res.ok) revalidatePath("/admin/users");
+  if (res.ok && !id) redirect(`/admin/users/${(res.data as { id: string }).id}?created=1`);
+  return res;
 }
 
 export async function setRolePermissionsAction(roleId: string, _p: R | null, fd: FormData): Promise<R> {
@@ -141,8 +144,8 @@ export async function setRolePermissionsAction(roleId: string, _p: R | null, fd:
 }
 
 export async function saveBranchAction(id: string | null, _p: R | null, fd: FormData): Promise<R> {
-  return runAction(async () => {
-    await saveBranch(
+  const res = await runAction(async () => {
+    return saveBranch(
       await actorOrThrow(),
       {
         name: s(fd, "name") ?? "",
@@ -154,8 +157,10 @@ export async function saveBranchAction(id: string | null, _p: R | null, fd: Form
       },
       id ?? undefined,
     );
-    revalidatePath("/admin/branches");
   }, "Branch saved.");
+  if (res.ok) revalidatePath("/admin/branches");
+  if (res.ok && !id) redirect("/admin/branches?created=1");
+  return res;
 }
 
 export async function markNotificationsReadAction() {

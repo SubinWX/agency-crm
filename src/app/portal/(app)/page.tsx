@@ -20,7 +20,7 @@ export default async function PortalHome() {
         <Stat label="Outstanding balance" value={formatINR(o.outstanding)} tone={o.outstanding ? "orange" : "emerald"} />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="My works">
+        <div data-tour="portal-works"><Card title="My works">
           {o.works.length === 0 ? <EmptyState title="No works yet." /> : (
             <ul className="divide-y divide-slate-100">
               {o.works.map((w) => (
@@ -33,8 +33,8 @@ export default async function PortalHome() {
               ))}
             </ul>
           )}
-        </Card>
-        <Card title="Invoices">
+        </Card></div>
+        <div data-tour="portal-invoices"><Card title="Invoices">
           {o.invoices.length === 0 ? <EmptyState title="No invoices yet." /> : (
             <ul className="divide-y divide-slate-100">
               {o.invoices.map((i) => (
@@ -48,7 +48,7 @@ export default async function PortalHome() {
               ))}
             </ul>
           )}
-        </Card>
+        </Card></div>
         {o.settings.showPayments && (
           <Card title="Payments">
             {o.payments.length === 0 ? <p className="text-sm text-slate-500">No payments recorded.</p> : (

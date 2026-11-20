@@ -43,3 +43,18 @@ body {
     @apply px-4 py-3 text-sm text-slate-700;
   }
 }
+
+/* Guided tour (driver.js) — match the app's look */
+.driver-popover.crm-tour {
+  @apply rounded-xl border border-slate-200 p-5 shadow-2xl;
+  max-width: 340px;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+.driver-popover.crm-tour .driver-popover-title { @apply text-base font-semibold text-slate-900; }
+.driver-popover.crm-tour .driver-popover-description { @apply mt-1 text-sm leading-relaxed text-slate-600; }
+.driver-popover.crm-tour .driver-popover-progress-text { @apply text-xs text-slate-400; }
+.driver-popover.crm-tour .driver-popover-footer button {
+  @apply rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700;
+  text-shadow: none;
+}
+.driver-popover.crm-tour .driver-popover-footer .driver-popover-next-btn { @apply border-blue-600 bg-blue-600 text-white; }

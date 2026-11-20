@@ -1,32 +1,25 @@
 import Link from "next/link";
-import { adjustCommissionAction, cancelCommissionAction, commissionBulkAction, saveDefaultRatesAction, saveUserRateAction } from "@/app/actions/billing";
+import { adjustCommissionAction, cancelCommissionAction, commissionBulkAction } from "@/app/actions/billing";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { CommissionStatusBadge } from "@/components/billing-ui";
-import { Card, EmptyState, PageHeader, Pagination } from "@/components/ui";
+import { EmptyState, PageHeader, Pagination } from "@/components/ui";
 import { requirePagePermission } from "@/server/auth/session";
-import { formatDateTime } from "@/server/lib/dates";
 import { formatINR, toPaise } from "@/server/modules/billing/calc";
-import { listCommissions, listRatePeople, rateHistory } from "@/server/modules/billing/commissions";
-import { getSetting } from "@/server/modules/settings/service";
+import { listCommissions } from "@/server/modules/billing/commissions";
 
 export const metadata = { title: "Commissions" };
 
 export default async function CommissionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requirePagePermission("ADMIN", "commissions.manage");
   const sp = await searchParams;
-  const [data, settings, people, history] = await Promise.all([
-    listCommissions(actor, { status: sp.status, type: sp.type, page: Number(sp.page) || 1 }),
-    getSetting("commission"),
-    listRatePeople(),
-    rateHistory(15),
-  ]);
+  const data = await listCommissions(actor, { status: sp.status, type: sp.type, page: Number(sp.page) || 1 });
   const m = (v: { toString(): string }) => formatINR(toPaise(v.toString()));
   const qs = (p: number) => `?${new URLSearchParams(Object.entries({ ...sp, page: String(p) }).filter(([, v]) => v) as [string, string][])}`;
   const totals = Object.fromEntries(data.byStatus.map((b) => [b.status, b._sum.amount]));
 
   return (
     <>
-      <PageHeader title="Commissions" subtitle="Created when a work is approved. Amounts follow the invoice (excl. GST) until approved for payout." />
+      <PageHeader title="Commissions" subtitle="Created when a work is approved. Amounts follow the invoice (excl. GST) until approved for payout." actions={<Link href="/admin/commissions/rates" className="btn-secondary">Commission rates</Link>} />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {(["ACCRUED", "APPROVED", "PAID", "CANCELLED"] as const).map((s) => (
           <Link key={s} href={`?status=${s}${sp.type ? `&type=${sp.type}` : ""}`} className="card p-4 hover:border-slate-300">
@@ -36,8 +29,8 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
         ))}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        <div className="space-y-3 xl:col-span-2">
+      <div>
+        <div className="space-y-3">
           <form className="flex flex-wrap gap-2">
             <select name="type" defaultValue={sp.type ?? ""} className="input w-40"><option value="">Agents & workers</option><option value="AGENT">Agents</option><option value="WORKER">Workers</option></select>
             <select name="status" defaultValue={sp.status ?? ""} className="input w-40"><option value="">All statuses</option><option value="ACCRUED">Accrued</option><option value="APPROVED">Approved</option><option value="PAID">Paid</option><option value="CANCELLED">Cancelled</option></select>
@@ -85,47 +78,6 @@ export default async function CommissionsPage({ searchParams }: { searchParams: 
           <Pagination page={data.page} pages={data.pages} makeHref={qs} />
         </div>
 
-        <div className="space-y-5">
-          <Card title="Default rates">
-            <ActionForm action={saveDefaultRatesAction}>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="label">Agent %</label><input name="agentPercent" type="number" step="0.01" min={0} max={100} defaultValue={settings.agentPercent} className="input" /></div>
-                <div><label className="label">Worker %</label><input name="workerPercent" type="number" step="0.01" min={0} max={100} defaultValue={settings.workerPercent} className="input" /></div>
-              </div>
-              <div>
-                <label className="label">Several workers on one work</label>
-                <select name="workerMode" defaultValue={settings.workerMode} className="input">
-                  <option value="SPLIT">Split the worker % equally</option>
-                  <option value="EACH">Each worker gets the full %</option>
-                </select>
-              </div>
-              <div><label className="label">Reason</label><input name="reason" className="input" /></div>
-              <SubmitButton>Save defaults</SubmitButton>
-            </ActionForm>
-          </Card>
-          <Card title="Personal rates">
-            <ul className="space-y-2">
-              {people.map((p) => (
-                <li key={p.id}>
-                  <ActionForm action={saveUserRateAction.bind(null, p.id)} className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm">{p.name} <span className="text-xs text-slate-400">{p.role.portal === "AGENT" ? "Agent" : "Worker"}</span></span>
-                    <input name="percent" type="number" step="0.01" min={0} max={100} defaultValue={p.commissionPercent?.toString() ?? ""} placeholder="default" className="input w-24" />
-                    <SubmitButton className="btn-secondary px-3" pendingText="…">Save</SubmitButton>
-                  </ActionForm>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-slate-500">Leave empty to use the default. Applies to works approved after the change.</p>
-          </Card>
-          <Card title="Rate history">
-            <ul className="space-y-1 text-xs text-slate-600">
-              {history.length === 0 && <li>No changes yet.</li>}
-              {history.map((h) => (
-                <li key={h.id}>{h.target}: {h.oldPercent?.toString() ?? "default"}% → <strong>{h.newPercent?.toString() ?? "default"}%</strong> · {h.who} · {formatDateTime(h.createdAt)}{h.reason ? ` · ${h.reason}` : ""}</li>
-              ))}
-            </ul>
-          </Card>
-        </div>
       </div>
     </>
   );
