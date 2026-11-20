@@ -71,7 +71,7 @@ export type SettingKey = keyof typeof schemas;
 export type SettingValue<K extends SettingKey> = z.infer<(typeof schemas)[K]>;
 
 export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
-  company: { name: "My Workshop", address: "", phone: "", email: "", gstNumber: "", logoKey: null },
+  company: { name: "Agency CRM", address: "", phone: "", email: "", gstNumber: "", logoKey: null },
   fullSlotMessage: {
     template: "Slots are full for {date}. Next available dates: {next_available_dates}.",
   },

@@ -5,7 +5,7 @@ import "./globals.css";
 const geistSans = localFont({ src: "./fonts/GeistVF.woff", variable: "--font-geist-sans", weight: "100 900" });
 
 export const metadata: Metadata = {
-  title: { default: "Workshop CRM", template: "%s · Workshop CRM" },
+  title: { default: "Agency CRM", template: "%s · Agency CRM" },
   description: "Works, scheduling, workers and approvals",
 };
 

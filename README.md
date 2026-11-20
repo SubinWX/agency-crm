@@ -1,4 +1,4 @@
-# Workshop CRM — Phases 1–6 (all MVP phases)
+# Agency CRM — Phases 1–6 (all MVP phases)
 
 Multi-branch CRM / workshop work-management system built from
 `CRM_Workshop_Garage_Management_Master_Prompt.md`. This is **Phase 1**: auth, RBAC,
