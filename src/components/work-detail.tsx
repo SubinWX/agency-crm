@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ImageInput } from "./image-input";
 import {
   addImageAction, approveWorkAction, assignWorkersAction, cancelWorkAction, changeDateAction, commentAction,
   completeWorkAction, editWorkAction, rejectWorkAction, removeImageAction, removeWorkerAction, replaceImageAction, startWorkAction,
@@ -110,7 +111,7 @@ export async function WorkDetailView({ actor, detail, backHref }: { actor: Actor
             <ActionForm action={completeWorkAction.bind(null, work.id)} confirm="Submit this work as completed?">
               <div>
                 <label className="label">Completion photos *</label>
-                <input name="images" type="file" accept="image/*" capture="environment" multiple required className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-white" />
+                <ImageInput name="images" multiple required capture="environment" maxFiles={10} label="Take / add photos" />
                 <p className="mt-1 text-xs text-slate-500">Take photos or pick from gallery. Up to 10.</p>
               </div>
               <div><label className="label">Message</label><input name="message" className="input" placeholder="Short note for the office" /></div>
@@ -147,33 +148,18 @@ export async function WorkDetailView({ actor, detail, backHref }: { actor: Actor
             <ImageGallery
               images={agentImages
                 .filter((i) => i.status === "ACTIVE" && i.current)
-                .map((i) => ({ src: fileUrl(i.current!.id), caption: i.caption, meta: `Uploaded by ${i.currentBy} · ${formatDateTime(i.current!.createdAt)}`, badge: i.current!.version > 1 ? `v${i.current!.version}` : null }))}
+                .map((i) => ({ id: i.id, src: fileUrl(i.current!.id), caption: i.caption, meta: `Uploaded by ${i.currentBy} · ${formatDateTime(i.current!.createdAt)}`, badge: i.current!.version > 1 ? `v${i.current!.version}` : null }))}
+              edit={canEdit ? { replace: replaceImageAction, remove: removeImageAction } : undefined}
             />
             {canEdit && (
               <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                 <ActionForm action={addImageAction.bind(null, work.id)} resetOnSuccess className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="flex-1">
                     <label className="label">Add photos</label>
-                    <input name="images" type="file" accept="image/*" multiple required className="block w-full text-sm" />
+                    <ImageInput name="images" multiple required maxFiles={10} />
                   </div>
                   <SubmitButton className="btn-secondary">Upload</SubmitButton>
                 </ActionForm>
-                {agentImages.filter((i) => i.status === "ACTIVE" && i.current).map((i, idx) => (
-                  <details key={i.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-                    <summary className="cursor-pointer font-medium">Replace or remove image {idx + 1}</summary>
-                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                      <ActionForm action={replaceImageAction.bind(null, i.id)} confirm="Replace this image? The current one will be kept in history.">
-                        <input name="image" type="file" accept="image/*" required className="block w-full text-sm" />
-                        <input name="reason" required className="input" placeholder="Reason for replacing *" />
-                        <SubmitButton className="btn-secondary">Replace</SubmitButton>
-                      </ActionForm>
-                      <ActionForm action={removeImageAction.bind(null, i.id)} confirm="Remove this image? It will be kept in history.">
-                        <input name="reason" required className="input" placeholder="Reason for removing *" />
-                        <SubmitButton className="btn-danger">Remove</SubmitButton>
-                      </ActionForm>
-                    </div>
-                  </details>
-                ))}
               </div>
             )}
             {can(actor, "works.view_image_history") && agentImages.some((i) => i.previous.length || i.status === "REMOVED") && (

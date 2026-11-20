@@ -15,6 +15,20 @@ body {
   .input {
     @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100;
   }
+  /* Dropdowns: one consistent chevron, inset from the edge and vertically centred. */
+  select.input {
+    @apply cursor-pointer appearance-none bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%2364748b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+    background-size: 1.1rem 1.1rem;
+    text-overflow: ellipsis;
+  }
+  select.input:disabled {
+    @apply cursor-not-allowed opacity-70;
+  }
+  select.input[multiple] {
+    @apply bg-none pr-3;
+  }
   .label {
     @apply mb-1 block text-sm font-medium text-slate-700;
   }

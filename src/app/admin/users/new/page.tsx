@@ -18,7 +18,7 @@ export default async function NewUserPage() {
       <PageHeader title="Add user" subtitle="Customer logins are created from the customer's page." actions={<Link href="/admin/users" className="btn-secondary">Cancel</Link>} />
       <Card title="User details">
         <ActionForm action={saveUserAction.bind(null, null)} className="space-y-5">
-          <UserFields roles={assignable} branches={branches} />
+          <UserFields roles={assignable.map((r) => ({ id: r.id, name: r.name, isSuperAdmin: r.isSuperAdmin }))} branches={branches} />
           <SubmitButton>Create user</SubmitButton>
         </ActionForm>
       </Card>

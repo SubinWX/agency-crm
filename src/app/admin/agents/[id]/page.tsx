@@ -32,7 +32,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
             id={u.id}
             branches={branches}
             showCommission={can(actor, "commissions.manage")}
-            p={{ name: u.name, email: u.email, phone: u.phone, status: u.status, branchIds: u.branches.map((b) => b.branchId), address: u.staffProfile?.address ?? null, joiningDate: data.joiningDate, emergencyContact: u.staffProfile?.emergencyContact ?? null, commissionPercent: u.commissionPercent !== null ? String(Number(u.commissionPercent)) : "" }}
+            p={{ photo: u.photoUrl ? `/api/avatar/${u.id}?v=${u.updatedAt.getTime()}` : null, gender: u.gender, name: u.name, email: u.email, phone: u.phone, status: u.status, branchIds: u.branches.map((b) => b.branchId), address: u.staffProfile?.address ?? null, joiningDate: data.joiningDate, emergencyContact: u.staffProfile?.emergencyContact ?? null, commissionPercent: u.commissionPercent !== null ? String(Number(u.commissionPercent)) : "" }}
           />
         </Card>
         <Card title={`Recent works (${data.works.length})`}>

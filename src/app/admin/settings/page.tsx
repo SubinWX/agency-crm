@@ -1,4 +1,7 @@
-import { changeCapacityAction, saveCompanyAction, saveFieldAction, saveLoginBrandingAction, saveMessagesAction } from "@/app/actions/admin";
+import { changeCapacityAction, saveCompanyAction, saveDateTimeAction, saveFieldAction, saveLoginBrandingAction, saveMessagesAction } from "@/app/actions/admin";
+import { formatClock, tzOption } from "@/lib/clock";
+import { systemTimeZone } from "@/server/lib/dates";
+import { ImageInput } from "@/components/image-input";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { saveBillingSettingsAction, uploadLogoAction } from "@/app/actions/billing";
 import { saveInventorySettingsAction } from "@/app/actions/inventory";
@@ -27,7 +30,7 @@ export default async function SettingsPage() {
     listAllFields(),
     getSetting("loginPage"),
   ]);
-  const [tax, invoiceSettings, numbering, inventorySettings, scoreCfg, portalCfg] = await Promise.all([getSetting("tax"), getSetting("invoice"), getSetting("numbering"), getSetting("inventory"), getSetting("agentScore"), getSetting("customerPortal")]);
+  const [dateTime, tax, invoiceSettings, numbering, inventorySettings, scoreCfg, portalCfg] = await Promise.all([getSetting("dateTime"), getSetting("tax"), getSetting("invoice"), getSetting("numbering"), getSetting("inventory"), getSetting("agentScore"), getSetting("customerPortal")]);
   const changers = await prisma.user.findMany({ where: { id: { in: history.map((h) => h.changedById ?? "").filter(Boolean) } }, select: { id: true, name: true } });
 
   return (
@@ -74,6 +77,39 @@ export default async function SettingsPage() {
           </ActionForm>
         </Card>
 
+        <Card title="Date & time">
+          {(() => {
+            const sys = systemTimeZone();
+            const now = new Date();
+            const zones = [...new Set([...Intl.supportedValuesOf("timeZone").map((z) => (z === "Asia/Calcutta" ? "Asia/Kolkata" : z)), dateTime.timeZone === "system" ? sys : dateTime.timeZone, "UTC"])].map((z) => tzOption(z, now)).sort((a, b) => a.minutes - b.minutes || a.value.localeCompare(b.value));
+            const active = dateTime.timeZone === "system" ? sys : dateTime.timeZone;
+            const preview = formatClock(now, active, dateTime.clockFormat !== "24h");
+            return (
+              <ActionForm action={saveDateTimeAction} className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="label" htmlFor="timeZone">Time zone</label>
+                  <select id="timeZone" name="timeZone" defaultValue={dateTime.timeZone} className="input">
+                    <option value="system">Use server system time ({tzOption(sys, now).label})</option>
+                    {zones.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">Decides what &quot;today&quot; is for works, reports and invoices, and the time shown in the top bar.</p>
+                </div>
+                <div>
+                  <label className="label" htmlFor="clockFormat">Clock</label>
+                  <select id="clockFormat" name="clockFormat" defaultValue={dateTime.clockFormat} className="input">
+                    <option value="12h">12-hour (2:30 PM)</option>
+                    <option value="24h">24-hour (14:30)</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <p className="text-sm text-slate-600">Now: <b>{preview.date}, {preview.time}</b> {preview.zone}</p>
+                </div>
+                <div className="sm:col-span-2"><SubmitButton>Save date &amp; time</SubmitButton></div>
+              </ActionForm>
+            );
+          })()}
+        </Card>
+
         <Card title="Company details">
           <ActionForm action={saveCompanyAction} className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2"><label className="label">Company name</label><input name="name" required defaultValue={company.name} className="input" /></div>
@@ -93,8 +129,9 @@ export default async function SettingsPage() {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <label className="label">Logo (PNG or JPG — shown on invoices)</label>
-              <input name="logo" type="file" accept="image/png,image/jpeg" className="block w-full text-sm" />
+              <label className="label">Logo (SVG, PNG or JPG — shown in the app and on invoices)</label>
+              <ImageInput name="logo" accept="image/svg+xml,.svg,image/png,image/jpeg,image/webp" maxEdge={1200} label="Choose logo" />
+              <p className="mt-1 text-xs text-slate-500">SVG stays sharp at any size; a PNG copy is made automatically for invoice PDFs.</p>
               {company.logoKey && <label className="mt-1 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" name="removeLogo" /> Remove logo</label>}
             </div>
             <SubmitButton className="btn-secondary">Save logo</SubmitButton>
@@ -167,7 +204,7 @@ export default async function SettingsPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <label className="label">Left-side image</label>
-                  <input name="image" type="file" accept="image/jpeg,image/png,image/webp" className="block w-full text-sm" />
+                  <ImageInput name="image" accept="image/jpeg,image/png,image/webp" maxEdge={2400} label="Choose image" />
                   <p className="mt-1 text-xs text-slate-500">Landscape photo, at least 1600px wide. Max 10 MB.</p>
                   {brand.imageKey && (
                     <label className="mt-1 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" name="removeImage" /> Use the default artwork instead</label>

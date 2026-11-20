@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { ComboInput } from "./combo-input";
+import { ImageInput } from "./image-input";
 import type { ActionResult } from "@/server/lib/errors";
 import { ActionForm, SubmitButton } from "./action-form";
 
 type Item = {
   kind: string; name: string; code: string; category: string | null; description: string | null; unit: string;
   sellingPrice: string | null; purchasePrice: string | null; reorderLevel: string; supplierId: string | null; notes: string | null; status: string;
+  showOnWebsite?: boolean; slug?: string | null; websiteUrl?: string | null;
 };
 
 /** Product / raw-material form (fields shown depend on the kind). */
@@ -33,8 +36,7 @@ export function ItemForm({
       <div><label className="label">{kind === "PRODUCT" ? "SKU / code" : "Material code"} *</label><input name="code" required defaultValue={item?.code} className="input uppercase" /></div>
       <div>
         <label className="label">Category</label>
-        <input name="category" list="item-categories" defaultValue={item?.category ?? ""} className="input" placeholder={kind === "PRODUCT" ? "Counter tops" : "Slabs, Cement, Hardware…"} />
-        <datalist id="item-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+        <ComboInput name="category" options={categories} defaultValue={item?.category ?? ""} placeholder={categories.length ? "Pick or type a new category" : kind === "PRODUCT" ? "e.g. Counter tops" : "e.g. Slabs, Cement"} newLabel="Add category" />
       </div>
       <div><label className="label">Unit *</label><input name="unit" required defaultValue={item?.unit ?? ""} className="input" placeholder="pcs, sq ft, bag, kg" /></div>
       {kind === "PRODUCT" && <div><label className="label">Selling price (₹)</label><input name="sellingPrice" inputMode="decimal" defaultValue={item?.sellingPrice ?? ""} className="input" /></div>}
@@ -49,7 +51,24 @@ export function ItemForm({
       </div>
       <div className="sm:col-span-2"><label className="label">Description</label><textarea name="description" rows={2} defaultValue={item?.description ?? ""} className="input" /></div>
       <div className="sm:col-span-2"><label className="label">Notes</label><textarea name="notes" rows={2} defaultValue={item?.notes ?? ""} className="input" /></div>
-      <div><label className="label">Images</label><input name="images" type="file" accept="image/*" multiple className="block w-full text-sm" /></div>
+      {kind === "PRODUCT" && (
+        <fieldset className="sm:col-span-2 rounded-lg border border-slate-200 p-4">
+          <legend className="px-1 text-sm font-semibold text-slate-700">Website</legend>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="showOnWebsite" defaultChecked={item?.showOnWebsite ?? false} className="h-4 w-4 rounded border-slate-300" /> Show this product on the website <span className="text-xs text-slate-500">(name, photos, price and description become public)</span></label>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label">Web address name</label>
+              <input name="slug" defaultValue={item?.slug ?? ""} className="input lowercase" placeholder="made from the name, e.g. granite-counter-top" />
+              <p className="mt-1 text-xs text-slate-500">Lowercase words joined by dashes. Used to find this product on the website.</p>
+            </div>
+            <div>
+              <label className="label">Link to product page (optional)</label>
+              <input name="websiteUrl" type="url" defaultValue={item?.websiteUrl ?? ""} className="input" placeholder="https://yourwebsite.com/products/…" />
+            </div>
+          </div>
+        </fieldset>
+      )}
+      <div><label className="label">Images</label><ImageInput name="images" multiple maxFiles={6} maxEdge={1600} /></div>
       <div><label className="label">Status</label><select name="status" defaultValue={item?.status ?? "ACTIVE"} className="input"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
       <div className="sm:col-span-2"><SubmitButton>{submitLabel}</SubmitButton></div>
     </ActionForm>

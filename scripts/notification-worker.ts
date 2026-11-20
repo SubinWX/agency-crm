@@ -6,6 +6,7 @@
 import "./load-env"; // must be first: DATABASE_URL, SECRETS_ENCRYPTION_KEY, APP_URL
 import { prisma } from "../src/server/db";
 import { processQueue } from "../src/server/modules/notifications/dispatch";
+import { loadBusinessTz } from "../src/server/modules/settings/service";
 
 const INTERVAL_MS = Number(process.env.WORKER_INTERVAL_MS ?? 5000);
 let stopping = false;
@@ -14,6 +15,7 @@ async function loop() {
   console.log(`[worker] started, polling every ${INTERVAL_MS / 1000}s (encryption key ${process.env.SECRETS_ENCRYPTION_KEY ? "loaded" : "MISSING"})`);
   while (!stopping) {
     try {
+      await loadBusinessTz(); // picks up time zone changes made in Settings
       let batch;
       do {
         batch = await processQueue({ limit: 20 });

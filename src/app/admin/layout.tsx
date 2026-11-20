@@ -65,7 +65,8 @@ const MENU: Entry[] = [
     label: "Inventory",
     icon: "inventory",
     children: [
-      { href: "/admin/inventory", label: "Stock", show: (a) => canViewInventory(a) },
+      { href: "/admin/inventory/products", label: "Products", show: (a) => canViewInventory(a) },
+      { href: "/admin/inventory", label: "Stock", exact: true, show: (a) => canViewInventory(a) },
       { href: "/admin/inventory/items/new", label: "Add item", show: (a) => can(a, "inventory.manage") },
       { href: "/admin/inventory/movements", label: "Stock history", show: (a) => canViewInventory(a) },
       { href: "/admin/suppliers", label: "Suppliers", show: (a) => canViewInventory(a) },

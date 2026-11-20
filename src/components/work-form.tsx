@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ImageInput } from "./image-input";
 import type { ActionResult } from "@/server/lib/errors";
 import { ActionForm, FieldError, SubmitButton } from "./action-form";
 import { AvailabilityPicker } from "./availability-picker";
@@ -123,7 +124,7 @@ export function WorkForm({
         )}
         <div className="mt-4">
           <label className="label">Work / location photos</label>
-          <input name="images" type="file" accept="image/*" multiple className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700" />
+          <ImageInput name="images" multiple maxFiles={10} label="Add photos" />
           <p className="mt-1 text-xs text-slate-500">Up to 10 photos, 10 MB each (JPG, PNG, WEBP, HEIC).</p>
         </div>
       </Step>

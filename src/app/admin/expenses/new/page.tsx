@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ImageInput } from "@/components/image-input";
 import { createExpenseAction } from "@/app/actions/billing";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Card, PageHeader } from "@/components/ui";
@@ -34,7 +35,7 @@ export default async function NewExpensePage() {
               </select>
             </div>
             <div><label className="label">Work reference (optional)</label><input name="workReference" className="input" placeholder="WRK-000001" /></div>
-            <div className="sm:col-span-2"><label className="label">Receipt / bill</label><input name="receipt" type="file" accept="image/*,application/pdf" className="block w-full text-sm" /></div>
+            <div className="sm:col-span-2"><label className="label">Receipt / bill</label><ImageInput name="receipt" accept="image/*,application/pdf" label="Add receipt" hint="Photo or PDF" /></div>
             <div className="sm:col-span-2 lg:col-span-3"><label className="label">Description</label><textarea name="description" rows={2} className="input" /></div>
           </div>
           <SubmitButton>Save expense</SubmitButton>

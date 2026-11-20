@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { Star } from "lucide-react";
+import { SmartLink } from "@/components/support-chrome";
 import { PriorityLabel, TicketStatusBadge } from "@/components/support-ui";
 import { EmptyState, PageHeader, Pagination } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
 import { formatDateTime } from "@/server/lib/dates";
-import { isManager, listCategories, listTickets, PRIORITY_LABELS, STATUS_LABELS } from "@/server/modules/support/service";
+import { getSetting } from "@/server/modules/settings/service";
+import { isManager, listCategories, listTickets, PRIORITY_LABELS, ratingSummary, STATUS_LABELS } from "@/server/modules/support/service";
 
 export const metadata = { title: "Tickets" };
 
@@ -11,15 +14,41 @@ export default async function SupportHome({ searchParams }: { searchParams: Prom
   const actor = await requireUser();
   const sp = await searchParams;
   const manager = isManager(actor);
-  const [data, categories] = await Promise.all([
+  const [data, categories, page, rating] = await Promise.all([
     listTickets(actor, { view: (sp.view as "mine") ?? (manager ? "all" : "mine"), status: sp.status === "ALL" ? undefined : (sp.status ?? (manager ? "ACTIVE" : undefined)), priority: sp.priority, categoryId: sp.categoryId, q: sp.q, page: Number(sp.page) || 1 }),
     listCategories(),
+    getSetting("supportPortal"),
+    manager ? ratingSummary(actor) : null,
   ]);
   const link = (extra: Record<string, string | undefined>) => `?${new URLSearchParams(Object.entries({ view: data.view, status: sp.status, priority: sp.priority, categoryId: sp.categoryId, q: sp.q, ...extra }).filter(([, v]) => v) as [string, string][])}`;
   const active = (["OPEN", "IN_REVIEW", "IN_PROGRESS", "WAITING_FOR_USER"] as const).reduce((a, s) => a + (data.counts[s] ?? 0), 0);
 
   return (
     <>
+      {page.showBanner && (
+        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-[#0f1b3d] via-indigo-900 to-blue-700 text-white shadow-lg">
+          {page.bannerImageKey && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/branding/support-banner?v=${encodeURIComponent(page.bannerImageKey)}`} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black to-black/40" style={{ opacity: page.bannerOverlay / 100 + 0.2 }} />
+            </>
+          )}
+          <div className="relative max-w-2xl px-6 py-12 sm:px-10 sm:py-16">
+            <h1 className="text-2xl font-bold leading-tight sm:text-4xl">{page.bannerHeadline}</h1>
+            {page.bannerSubtext && <p className="mt-3 text-sm text-white/85 sm:text-base">{page.bannerSubtext}</p>}
+            {page.bannerCtaLabel && page.bannerCtaHref && (
+              <SmartLink href={page.bannerCtaHref} className="mt-6 inline-flex items-center rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-slate-900 shadow hover:bg-blue-50">{page.bannerCtaLabel} →</SmartLink>
+            )}
+          </div>
+        </section>
+      )}
+      {rating && rating.count > 0 && (
+        <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+          <span><b>{rating.average}</b> / 5 average rating from {rating.count} review{rating.count === 1 ? "" : "s"} (last 90 days)</span>
+        </div>
+      )}
       <PageHeader
         title={manager ? "Support tickets" : "My requests"}
         subtitle={manager ? "Complaints and requests from your team." : "Raise a complaint or request and follow its progress here."}
@@ -64,6 +93,7 @@ export default async function SupportHome({ searchParams }: { searchParams: Prom
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                  {t.rating && <span className="inline-flex items-center gap-0.5 text-xs font-medium text-amber-600" title={`Rated ${t.rating} of 5`}><Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />{t.rating}</span>}
                   <PriorityLabel priority={t.priority} />
                   <TicketStatusBadge status={t.status} />
                   <span className="hidden text-xs text-slate-400 sm:inline">{formatDateTime(t.lastActivityAt)}</span>

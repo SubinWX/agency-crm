@@ -47,6 +47,9 @@ export async function listPeople(actor: Actor, kind: PersonKind, f: { q?: string
       status: true,
       lastLoginAt: true,
       commissionPercent: true,
+      photoUrl: true,
+      gender: true,
+      updatedAt: true,
       staffProfile: { select: { address: true, joiningDate: true } },
       branches: { select: { branch: { select: { name: true } } } },
     },
@@ -102,6 +105,7 @@ export interface PersonInput {
   joiningDate?: string;
   emergencyContact?: string;
   commissionPercent?: string;
+  gender?: "MALE" | "FEMALE" | "";
 }
 
 export async function savePerson(actor: Actor, kind: PersonKind, input: PersonInput, id?: string) {
@@ -123,6 +127,7 @@ export async function savePerson(actor: Actor, kind: PersonKind, input: PersonIn
       branchIds: input.branchIds,
       status: input.status,
       password: input.password || undefined,
+      gender: input.gender,
       profile: { address: input.address, joiningDate: input.joiningDate, emergencyContact: input.emergencyContact },
     },
     id,

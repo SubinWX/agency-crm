@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PersonAvatar } from "@/components/person-avatar";
 import { EmptyState, PageHeader, Pagination } from "@/components/ui";
 import { requirePagePermission } from "@/server/auth/session";
 import { searchCustomers } from "@/server/modules/customers/service";
@@ -27,7 +28,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             <tbody className="divide-y divide-slate-100">
               {data.items.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="table-td"><Link href={`/admin/customers/${c.id}`} className="font-medium text-blue-700">{c.name}</Link><div className="text-xs text-slate-500">{c.address}</div></td>
+                  <td className="table-td"><div className="flex items-center gap-3"><PersonAvatar src={c.photoKey ? `/api/customers/${c.id}/photo?v=${c.updatedAt.getTime()}` : null} gender={c.gender} name={c.name} size={36} /><div className="min-w-0"><Link href={`/admin/customers/${c.id}`} className="font-medium text-blue-700">{c.name}</Link><div className="max-w-[18rem] truncate text-xs text-slate-500">{c.address}</div></div></div></td>
                   <td className="table-td">{c.phone}</td>
                   <td className="table-td text-xs">{c.email ?? "—"}</td>
                   <td className="table-td">{c.branch?.name ?? "—"}</td>

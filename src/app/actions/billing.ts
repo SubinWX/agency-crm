@@ -11,7 +11,7 @@ import { addCategory, createExpense, voidExpense } from "@/server/modules/billin
 import { cancelInvoice, createInvoice, recordPayment, updateInvoice, voidPayment } from "@/server/modules/billing/invoices";
 import { recordSalaryPayment, setSalary, voidSalaryPayment } from "@/server/modules/billing/salary";
 import { getSetting, updateSetting } from "@/server/modules/settings/service";
-import { storeImage, type UploadInput } from "@/server/storage";
+import { storeLogo, type UploadInput } from "@/server/storage";
 
 type R = ActionResult<unknown>;
 const s = (fd: FormData, k: string) => {
@@ -216,16 +216,11 @@ export async function uploadLogoAction(_p: R | null, fd: FormData): Promise<R> {
     const actor = await actorOrThrow();
     const f = file(fd, "logo");
     const remove = fd.get("removeLogo") === "on";
-    if (!f && !remove) throw invalid("Choose a PNG or JPG logo.");
-    let logoKey: string | null = null;
-    if (f) {
-      const stored = await storeImage(f, "branding");
-      if (!/\.(png|jpg)$/.test(stored.storageKey)) throw invalid("Logo must be PNG or JPG (used on invoice PDFs).");
-      logoKey = stored.storageKey;
-    }
+    if (!f && !remove) throw invalid("Choose an SVG, PNG or JPG logo.");
+    const keys = f ? await storeLogo(f) : { logoKey: null, logoPdfKey: null };
     await transaction(async (tx) => {
       const company = await getSetting("company", tx);
-      await updateSetting(actor, "company", { ...company, logoKey }, tx);
+      await updateSetting(actor, "company", { ...company, ...keys }, tx);
     });
     revalidatePath("/", "layout");
   }, "Logo updated.");

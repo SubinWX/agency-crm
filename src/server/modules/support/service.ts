@@ -309,6 +309,33 @@ export async function requesterAction(actor: Actor, ticketId: string, action: "c
   });
 }
 
+// ───────────────────────────── Requester review ─────────────────────────────
+
+/** The person who raised the ticket rates the support (1–5 stars) once it's resolved or closed. Can be updated. */
+export async function rateTicket(actor: Actor, ticketId: string, input: { rating: number; comment?: string }) {
+  const rating = Math.round(Number(input.rating));
+  if (!(rating >= 1 && rating <= 5)) throw invalid("Choose 1 to 5 stars.");
+  const comment = input.comment?.trim().slice(0, 1000) || null;
+  return transaction(async (tx) => {
+    const t = await loadForUpdate(tx, actor, ticketId);
+    if (t.submittedById !== actor.id) throw forbidden("Only the person who raised this request can review it.");
+    if (t.status !== "RESOLVED" && t.status !== "CLOSED") throw new AppError("INVALID_STATE", "You can review once the request is resolved.");
+    await tx.supportTicket.update({ where: { id: ticketId }, data: { rating, ratingComment: comment, ratedAt: new Date() } });
+    await logEvent(tx, ticketId, actor.id, "reviewed", t.rating ? String(t.rating) : null, String(rating), comment);
+    await audit(tx, actor, { action: "support.review", entityType: "SupportTicket", entityId: ticketId, before: { rating: t.rating }, after: { rating, comment } });
+    const tell = t.assignedToId ? [t.assignedToId] : await managerIds(tx, t.branchId, actor.id);
+    await notify(tx, { userIds: tell, type: "support.ticket_reviewed", title: `${t.number} rated ${rating}★`, body: comment ?? "No comment", link: `/support/${t.id}` });
+  });
+}
+
+/** Average rating and count over the last `days` (managers). */
+export async function ratingSummary(actor: Actor, days = 90) {
+  if (!isManager(actor)) return null;
+  const since = new Date(Date.now() - days * 86_400_000);
+  const r = await prisma.supportTicket.aggregate({ where: { AND: [managerScope(actor), { rating: { not: null }, ratedAt: { gte: since } }] }, _avg: { rating: true }, _count: { rating: true } });
+  return { average: r._avg.rating ? Math.round(r._avg.rating * 10) / 10 : null, count: r._count.rating };
+}
+
 // ───────────────────────────── Queries ─────────────────────────────
 
 export async function listTickets(

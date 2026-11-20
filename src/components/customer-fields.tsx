@@ -1,13 +1,16 @@
+import { PhotoGenderFields } from "./photo-gender-fields";
+
 /** Customer form fields (used on Add and Edit pages). */
 export function CustomerFields({
   c,
   branches,
 }: {
-  c?: { name: string; phone: string; altPhone: string | null; email: string | null; address: string | null; location: string | null; branchId: string | null; notes: string | null; gstNumber?: string | null };
+  c?: { name: string; phone: string; altPhone: string | null; email: string | null; address: string | null; location: string | null; branchId: string | null; notes: string | null; gstNumber?: string | null; id?: string; gender?: "MALE" | "FEMALE" | null; photoKey?: string | null; updatedAt?: Date };
   branches: { id: string; name: string }[];
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="sm:col-span-2 lg:col-span-3"><PhotoGenderFields photo={c?.photoKey && c.id ? `/api/customers/${c.id}/photo?v=${c.updatedAt?.getTime() ?? ""}` : null} gender={c?.gender} name={c?.name} /></div>
       <div><label className="label">Customer name *</label><input name="name" required defaultValue={c?.name} className="input" /></div>
       <div><label className="label">Phone *</label><input name="phone" type="tel" required defaultValue={c?.phone} className="input" /></div>
       <div><label className="label">Alternative phone</label><input name="altPhone" type="tel" defaultValue={c?.altPhone ?? ""} className="input" /></div>

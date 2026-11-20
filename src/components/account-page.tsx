@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { GenderField, PersonAvatar } from "./person-avatar";
+import { ImageInput } from "./image-input";
 import { changePasswordAction, changePhotoAction, updateProfileAction } from "@/app/actions/account";
 import { formatDateTime } from "@/server/lib/dates";
 import { getOwnProfile } from "@/server/modules/account/service";
@@ -16,19 +18,13 @@ const TABS = [
 export async function AccountPage({ actor, base, tab }: { actor: Actor; base: string; tab?: string }) {
   const me = await getOwnProfile(actor);
   const active = TABS.some(([k]) => k === tab) ? tab : "profile";
-  const initials = me.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const avatar = me.photoUrl ? `/api/avatar/${me.id}?v=${me.updatedAt.getTime()}` : null;
   return (
     <>
       <PageHeader title="My profile" subtitle={`${me.role.name}${me.branches.length ? ` · ${me.branches.map((b) => b.branch.name).join(", ")}` : ""}`} />
       <div className="grid gap-5 lg:grid-cols-4">
         <div className="card h-fit p-5 text-center">
-          {avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatar} alt="" className="mx-auto h-24 w-24 rounded-full object-cover" />
-          ) : (
-            <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-blue-600 text-3xl font-semibold text-white">{initials}</span>
-          )}
+          <PersonAvatar src={avatar} gender={me.gender} name={me.name} size={96} className="mx-auto" />
           <p className="mt-3 font-semibold">{me.name}</p>
           <p className="text-sm text-slate-500">{me.email}</p>
           <p className="mt-1 text-xs text-slate-400">Last sign-in {me.lastLoginAt ? formatDateTime(me.lastLoginAt) : "—"}</p>
@@ -45,6 +41,8 @@ export async function AccountPage({ actor, base, tab }: { actor: Actor; base: st
                 <div><label className="label">Name</label><input name="name" required defaultValue={me.name} className="input" /></div>
                 <div><label className="label">Email (sign-in)</label><input value={me.email} disabled className="input" /><p className="mt-1 text-xs text-slate-500">Ask an administrator to change your sign-in email.</p></div>
                 <div><label className="label">Phone</label><input name="phone" defaultValue={me.phone ?? ""} className="input" /></div>
+                <GenderField value={me.gender} />
+                <p className="-mt-1 text-xs text-slate-500">Used for your default picture when you haven&apos;t uploaded a photo.</p>
                 <div><SubmitButton>Save profile</SubmitButton></div>
               </ActionForm>
             </Card>
@@ -62,7 +60,7 @@ export async function AccountPage({ actor, base, tab }: { actor: Actor; base: st
           {active === "picture" && (
             <Card title="Change picture">
               <ActionForm action={changePhotoAction} resetOnSuccess className="grid max-w-md gap-3">
-                <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700" />
+                <ImageInput name="photo" accept="image/jpeg,image/png,image/webp" required aspect={1} maxEdge={800} label="Choose picture" />
                 <p className="text-xs text-slate-500">Square photo works best. JPG, PNG or WEBP, up to 5 MB.</p>
                 <div><SubmitButton>Upload picture</SubmitButton></div>
               </ActionForm>

@@ -1,4 +1,5 @@
 import { createTicketAction } from "@/app/actions/support";
+import { ImageInput } from "@/components/image-input";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
@@ -42,7 +43,7 @@ export default async function NewTicketPage() {
           <div><label className="label">Description *</label><textarea name="description" required minLength={5} rows={6} maxLength={5000} className="input" placeholder="What happened? What do you need?" /></div>
           <div>
             <label className="label">Attachments</label>
-            <input name="attachments" type="file" accept="image/*,application/pdf" multiple className="block w-full text-sm" />
+            <ImageInput name="attachments" accept="image/*,application/pdf" multiple maxFiles={5} label="Add files" />
             <p className="mt-1 text-xs text-slate-500">Photos or PDF, up to 5 files, 10 MB each.</p>
           </div>
           <SubmitButton pendingText="Submitting…">Submit request</SubmitButton>

@@ -49,6 +49,9 @@ export async function saveBranch(actor: Actor, input: BranchInput, id?: string) 
       return b;
     }
     const b = await tx.branch.create({ data });
+    // Super Admins get every branch automatically.
+    const supers = await tx.user.findMany({ where: { deletedAt: null, role: { isSuperAdmin: true } }, select: { id: true } });
+    if (supers.length) await tx.userBranch.createMany({ data: supers.map((u) => ({ userId: u.id, branchId: b.id })), skipDuplicates: true });
     await audit(tx, actor, { action: "branch.create", entityType: "Branch", entityId: b.id, after: b });
     return b;
   });

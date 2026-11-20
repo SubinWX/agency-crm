@@ -34,8 +34,30 @@ const itemSchema = z.object({
   supplierId: z.string().optional(),
   notes: opt(2000),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+  /** Website listing (products only). */
+  showOnWebsite: z.boolean().default(false),
+  slug: z.string().trim().toLowerCase().max(80).optional(),
+  websiteUrl: z.string().trim().max(500).optional(),
 });
 export type ItemInput = z.input<typeof itemSchema>;
+
+/** "Granite Counter-Top 60\"" → "granite-counter-top-60". */
+export function slugify(v: string) {
+  return v.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+}
+
+function cleanWebsiteUrl(v?: string) {
+  const t = v?.trim();
+  if (!t) return null;
+  let u: URL;
+  try {
+    u = new URL(t);
+  } catch {
+    throw invalid("Website link must be a full address starting with https://");
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw invalid("Website link must start with https://");
+  return u.toString();
+}
 
 function priceOrNull(v: string | undefined, field: string) {
   if (!v?.trim()) return null;
@@ -62,12 +84,20 @@ export async function saveItem(actor: Actor, input: ItemInput, id?: string, imag
     supplierId: d.supplierId || null,
     notes: d.notes,
     status: d.status,
+    showOnWebsite: d.kind === "PRODUCT" && d.showOnWebsite,
+    slug: d.kind === "PRODUCT" ? (d.slug ? slugify(d.slug) : d.showOnWebsite ? slugify(d.name) : null) || null : null,
+    websiteUrl: d.kind === "PRODUCT" ? cleanWebsiteUrl(d.websiteUrl) : null,
   };
-  const stored = await Promise.all(images.filter((f) => f.size > 0).slice(0, 6).map((f) => storeImage(f, "items")));
+  if (data.showOnWebsite && !data.slug) throw invalid("Web address name: use letters or numbers.");
+  const stored = await Promise.all(images.filter((f) => f.size > 0).slice(0, 6).map((f) => storeImage(f, "items", { maxEdge: 1600 })));
 
   return transaction(async (tx) => {
     const dupe = await tx.item.findFirst({ where: { code: d.code, NOT: id ? { id } : undefined } });
     if (dupe) throw invalid(`Code ${d.code} is already used by “${dupe.name}”.`);
+    if (data.slug) {
+      const taken = await tx.item.findFirst({ where: { slug: data.slug, NOT: id ? { id } : undefined }, select: { name: true } });
+      if (taken) throw invalid(`Web address “${data.slug}” is already used by “${taken.name}”. Choose another.`);
+    }
     if (data.supplierId && !(await tx.supplier.findFirst({ where: { id: data.supplierId, deletedAt: null } }))) throw invalid("Supplier not found.");
     let item;
     if (id) {
@@ -106,6 +136,66 @@ export async function listItems(actor: Actor, f: { q?: string; kind?: string; ca
   if (f.status === "INACTIVE") and.push({ status: "INACTIVE" });
   else and.push({ status: "ACTIVE" });
   return prisma.item.findMany({ where: { AND: and }, orderBy: [{ kind: "asc" }, { name: "asc" }], take: 500, include: { supplier: { select: { name: true } } } });
+}
+
+/** Product catalogue (cards with a cover image). */
+export async function listProducts(actor: Actor, f: { q?: string; category?: string; website?: string; status?: string } = {}) {
+  requireView(actor);
+  const and: Prisma.ItemWhereInput[] = [{ deletedAt: null, kind: "PRODUCT" }];
+  const q = f.q?.trim();
+  if (q) and.push({ OR: [{ name: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }, { slug: { contains: q.toLowerCase() } }] });
+  if (f.category) and.push({ category: f.category });
+  if (f.website === "on") and.push({ showOnWebsite: true });
+  if (f.website === "off") and.push({ showOnWebsite: false });
+  and.push({ status: f.status === "INACTIVE" ? "INACTIVE" : "ACTIVE" });
+  return prisma.item.findMany({
+    where: { AND: and },
+    orderBy: { name: "asc" },
+    take: 500,
+    select: {
+      id: true, name: true, code: true, category: true, unit: true, sellingPrice: true, showOnWebsite: true, slug: true, websiteUrl: true, status: true,
+      images: { where: { removedAt: null }, orderBy: { createdAt: "asc" }, take: 1, select: { id: true } },
+      _count: { select: { images: { where: { removedAt: null } } } },
+    },
+  });
+}
+
+// ───────────────────────────── Public website feed ─────────────────────────────
+
+const publicWhere: Prisma.ItemWhereInput = { kind: "PRODUCT", showOnWebsite: true, status: "ACTIVE", deletedAt: null };
+
+function toPublic(base: string, i: { name: string; slug: string | null; code: string; category: string | null; description: string | null; unit: string; sellingPrice: Prisma.Decimal | null; websiteUrl: string | null; updatedAt: Date; images: { id: string }[] }) {
+  return {
+    name: i.name,
+    slug: i.slug,
+    sku: i.code,
+    category: i.category,
+    description: i.description,
+    unit: i.unit,
+    price: i.sellingPrice ? Number(i.sellingPrice) : null,
+    currency: "INR",
+    websiteUrl: i.websiteUrl,
+    images: i.images.map((img) => `${base}/api/public/products/images/${img.id}`),
+    updatedAt: i.updatedAt.toISOString(),
+  };
+}
+const publicSelect = {
+  name: true, slug: true, code: true, category: true, description: true, unit: true, sellingPrice: true, websiteUrl: true, updatedAt: true,
+  images: { where: { removedAt: null }, orderBy: { createdAt: "asc" as const }, select: { id: true } },
+} satisfies Prisma.ItemSelect;
+
+/** Products marked "Show on website" — no sign-in needed (for the company website). */
+export async function listPublicProducts(base: string, category?: string) {
+  const rows = await prisma.item.findMany({ where: { ...publicWhere, ...(category ? { category } : {}) }, orderBy: { name: "asc" }, take: 1000, select: publicSelect });
+  return rows.map((r) => toPublic(base, r));
+}
+export async function getPublicProduct(base: string, slug: string) {
+  const r = await prisma.item.findFirst({ where: { ...publicWhere, slug }, select: publicSelect });
+  return r ? toPublic(base, r) : null;
+}
+/** Image of a product that is on the website (else null). */
+export async function getPublicProductImage(imageId: string) {
+  return prisma.itemImage.findFirst({ where: { id: imageId, removedAt: null, item: publicWhere }, select: { storageKey: true, mimeType: true } });
 }
 
 export async function listCategories() {

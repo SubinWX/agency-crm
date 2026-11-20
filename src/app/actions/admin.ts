@@ -10,10 +10,10 @@ import { updateLoginBranding } from "@/server/modules/branding/service";
 import type { UploadInput } from "@/server/storage";
 import { changeCapacity, setDateBlocked } from "@/server/modules/capacity/service";
 import { saveField } from "@/server/modules/custom-fields/service";
-import { archiveCustomer, createCustomer, updateCustomer } from "@/server/modules/customers/service";
+import { archiveCustomer, createCustomer, setCustomerPhoto, updateCustomer } from "@/server/modules/customers/service";
 import { markAllRead } from "@/server/modules/notifications/service";
-import { updateSetting } from "@/server/modules/settings/service";
-import { saveUser, setRolePermissions } from "@/server/modules/users/service";
+import { getSetting, loadBusinessTz, updateSetting } from "@/server/modules/settings/service";
+import { saveUser, setRolePermissions, setUserPhoto } from "@/server/modules/users/service";
 
 type R = ActionResult<unknown>;
 const s = (fd: FormData, k: string) => {
@@ -51,13 +51,15 @@ export async function saveCompanyAction(_p: R | null, fd: FormData): Promise<R> 
   return runAction(async () => {
     const actor = await actorOrThrow();
     await transaction(async (tx) => {
+      const current = await getSetting("company", tx);
       await updateSetting(actor, "company", {
         name: s(fd, "name") ?? "",
         address: s(fd, "address") ?? "",
         phone: s(fd, "phone") ?? "",
         email: s(fd, "email") ?? "",
         gstNumber: s(fd, "gstNumber") ?? "",
-        logoKey: null,
+        logoKey: current.logoKey,
+        logoPdfKey: current.logoPdfKey,
       }, tx);
     });
     revalidatePath("/admin/settings");
@@ -92,10 +94,21 @@ const customerFromForm = (fd: FormData) => ({
   location: s(fd, "location"),
   notes: s(fd, "notes"),
   branchId: s(fd, "branchId"),
+  gender: (s(fd, "gender") ?? "") as "MALE" | "FEMALE" | "",
 });
+const photoOf = (fd: FormData) => {
+  const f = fd.get("photo");
+  return f && typeof f === "object" && (f as File).size > 0 ? (f as unknown as UploadInput) : null;
+};
 
 export async function createCustomerAction(_p: R | null, fd: FormData): Promise<R> {
-  const res = await runAction(async () => createCustomer(await actorOrThrow(), customerFromForm(fd)));
+  const res = await runAction(async () => {
+    const actor = await actorOrThrow();
+    const c = await createCustomer(actor, customerFromForm(fd));
+    const photo = photoOf(fd);
+    if (photo) await setCustomerPhoto(actor, c.id, photo);
+    return c;
+  });
   if (!res.ok) return res;
   revalidatePath("/admin/customers");
   redirect(`/admin/customers/${(res.data as { id: string }).id}?created=1`);
@@ -103,7 +116,11 @@ export async function createCustomerAction(_p: R | null, fd: FormData): Promise<
 
 export async function updateCustomerAction(id: string, _p: R | null, fd: FormData): Promise<R> {
   return runAction(async () => {
-    await updateCustomer(await actorOrThrow(), id, customerFromForm(fd));
+    const actor = await actorOrThrow();
+    await updateCustomer(actor, id, customerFromForm(fd));
+    const photo = photoOf(fd);
+    if (photo) await setCustomerPhoto(actor, id, photo);
+    else if (fd.get("removePhoto") === "on") await setCustomerPhoto(actor, id, null, true);
     revalidatePath("/admin/customers");
   }, "Customer updated.");
 }
@@ -117,8 +134,9 @@ export async function archiveCustomerAction(id: string, _p: R | null, fd: FormDa
 
 export async function saveUserAction(id: string | null, _p: R | null, fd: FormData): Promise<R> {
   const res = await runAction(async () => {
-    return saveUser(
-      await actorOrThrow(),
+    const actor = await actorOrThrow();
+    const user = await saveUser(
+      actor,
       {
         name: s(fd, "name") ?? "",
         email: s(fd, "email") ?? "",
@@ -127,9 +145,14 @@ export async function saveUserAction(id: string | null, _p: R | null, fd: FormDa
         branchIds: fd.getAll("branchIds").map(String),
         status: (s(fd, "status") as "ACTIVE" | "INACTIVE") ?? "ACTIVE",
         password: s(fd, "password") || undefined,
+        gender: (s(fd, "gender") ?? "") as "MALE" | "FEMALE" | "",
       },
       id ?? undefined,
     );
+    const photo = photoOf(fd);
+    if (photo) await setUserPhoto(actor, user.id, photo);
+    else if (fd.get("removePhoto") === "on") await setUserPhoto(actor, user.id, null, true);
+    return user;
   }, "User saved.");
   if (res.ok) revalidatePath("/admin/users");
   if (res.ok && !id) redirect(`/admin/users/${(res.data as { id: string }).id}?created=1`);
@@ -180,4 +203,13 @@ export async function saveLoginBrandingAction(_p: R | null, fd: FormData): Promi
     });
     revalidatePath("/", "layout");
   }, "Login page updated.");
+}
+
+export async function saveDateTimeAction(_p: R | null, fd: FormData): Promise<R> {
+  return runAction(async () => {
+    const actor = await actorOrThrow();
+    await transaction((tx) => updateSetting(actor, "dateTime", { timeZone: s(fd, "timeZone") ?? "", clockFormat: s(fd, "clockFormat") === "24h" ? "24h" : "12h" }, tx));
+    await loadBusinessTz();
+    revalidatePath("/", "layout");
+  }, "Date & time settings saved.");
 }

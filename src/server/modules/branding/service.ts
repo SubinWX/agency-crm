@@ -23,6 +23,6 @@ export async function updateLoginBranding(
   const text = parseInput(input, data);
   const current = await getSetting("loginPage");
   let imageKey = data.removeImage ? null : current.imageKey;
-  if (data.image && data.image.size > 0) imageKey = (await storeImage(data.image, "branding")).storageKey;
+  if (data.image && data.image.size > 0) imageKey = (await storeImage(data.image, "branding", { maxEdge: 2400 })).storageKey;
   await transaction((tx) => updateSetting(actor, "loginPage", { ...text, imageKey }, tx, "branding.manage"));
 }

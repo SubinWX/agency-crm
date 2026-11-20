@@ -32,6 +32,9 @@ const itemFromForm = (fd: FormData) => ({
   supplierId: s(fd, "supplierId"),
   notes: s(fd, "notes"),
   status: (s(fd, "status") === "INACTIVE" ? "INACTIVE" : "ACTIVE") as "ACTIVE" | "INACTIVE",
+  showOnWebsite: fd.get("showOnWebsite") === "on",
+  slug: s(fd, "slug"),
+  websiteUrl: s(fd, "websiteUrl"),
 });
 
 export async function createItemAction(_p: R | null, fd: FormData): Promise<R> {

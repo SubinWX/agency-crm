@@ -161,6 +161,20 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
               ]}
             />
           </Card>
+          {item.kind === "PRODUCT" && (
+            <Card title="Website">
+              {item.showOnWebsite ? (
+                <div className="space-y-2 text-sm">
+                  <p className="flex items-center gap-2 font-medium text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Shown on the website</p>
+                  <p className="text-xs text-slate-500">Product data for the website (JSON):</p>
+                  <a href={`/api/public/products/${item.slug}`} target="_blank" className="block break-all rounded bg-slate-50 px-2 py-1.5 font-mono text-xs text-blue-700">/api/public/products/{item.slug}</a>
+                  {item.websiteUrl && <a href={item.websiteUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-blue-700">Product page ↗</a>}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">Not on the website. Tick &quot;Show this product on the website&quot; in Edit item to publish it.</p>
+              )}
+            </Card>
+          )}
           <Card title="Images">
             <ImageGallery images={item.images.map((i) => ({ src: `/api/inventory/images/${i.id}` }))} />
             {manage && item.images.length > 0 && (

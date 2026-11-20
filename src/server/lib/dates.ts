@@ -1,14 +1,42 @@
 import { addDays, format, parseISO } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
-/** Business timezone decides which calendar day "today" is. */
-export const BUSINESS_TZ = process.env.BUSINESS_TIMEZONE || "Asia/Kolkata";
+/** The server machine's own time zone. */
+export function systemTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+export function isValidTimeZone(tz: string): boolean {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Fallback before the saved setting is loaded (env, else India). */
+export const DEFAULT_TZ = process.env.BUSINESS_TIMEZONE && isValidTimeZone(process.env.BUSINESS_TIMEZONE) ? process.env.BUSINESS_TIMEZONE : "Asia/Kolkata";
+let currentTz = DEFAULT_TZ;
+
+/** Business time zone: decides which calendar day "today" is and how times are shown. Set in Settings → Date & time. */
+export function businessTz(): string {
+  return currentTz;
+}
+
+/** Apply the saved setting ("system" = the server's own time zone). */
+export function setBusinessTz(setting: string) {
+  const tz = setting === "system" ? systemTimeZone() : setting;
+  currentTz = isValidTimeZone(tz) ? tz : DEFAULT_TZ;
+  return currentTz;
+}
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Today's date (YYYY-MM-DD) in the business timezone. */
 export function businessToday(now = new Date()): string {
-  return formatInTimeZone(now, BUSINESS_TZ, "yyyy-MM-dd");
+  return formatInTimeZone(now, currentTz, "yyyy-MM-dd");
 }
 
 export function isIsoDate(s: string): boolean {
@@ -37,5 +65,13 @@ export function formatDateLabel(iso: string): string {
 }
 
 export function formatDateTime(d: Date): string {
-  return formatInTimeZone(d, BUSINESS_TZ, "d MMM yyyy, h:mm a");
+  return formatInTimeZone(d, currentTz, "d MMM yyyy, h:mm a");
+}
+
+/** Start/end instant of a business-time-zone day (for timestamp filters). */
+export function dayStart(iso: string): Date {
+  return fromZonedTime(`${iso}T00:00:00`, currentTz);
+}
+export function dayEnd(iso: string): Date {
+  return fromZonedTime(`${iso}T23:59:59.999`, currentTz);
 }

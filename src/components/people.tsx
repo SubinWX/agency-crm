@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PersonAvatar } from "./person-avatar";
+import { PhotoGenderFields } from "./photo-gender-fields";
 import { savePersonAction } from "@/app/actions/people";
 import { formatDateTime } from "@/server/lib/dates";
 import type { listPeople, PersonKind } from "@/server/modules/people/service";
@@ -48,7 +50,7 @@ export function PeopleList({ kind, rows, branches, sp }: { kind: PersonKind; row
             <tbody className="divide-y divide-slate-100">
               {rows.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50">
-                  <td className="table-td"><Link href={`${L.base}/${u.id}`} className="font-medium text-blue-700">{u.name}</Link><div className="text-xs text-slate-500">{u.email}</div></td>
+                  <td className="table-td"><div className="flex items-center gap-3"><PersonAvatar src={u.photoUrl ? `/api/avatar/${u.id}?v=${u.updatedAt.getTime()}` : null} gender={u.gender} name={u.name} size={36} /><div className="min-w-0"><Link href={`${L.base}/${u.id}`} className="font-medium text-blue-700">{u.name}</Link><div className="text-xs text-slate-500">{u.email}</div></div></div></td>
                   <td className="table-td whitespace-nowrap">{u.phone ? <a href={`tel:${u.phone}`} className="hover:text-blue-700">{u.phone}</a> : "—"}</td>
                   <td className="table-td max-w-[14rem] truncate text-sm">{u.staffProfile?.address ?? <span className="text-slate-400">—</span>}</td>
                   <td className="table-td text-xs">{u.branches.map((b) => b.branch.name).join(", ") || "—"}</td>
@@ -82,13 +84,14 @@ export function PersonForm({
   id: string | null;
   branches: { id: string; name: string }[];
   showCommission: boolean;
-  p?: { name: string; email: string; phone: string | null; status: string; branchIds: string[]; address: string | null; joiningDate: string; emergencyContact: string | null; commissionPercent: string };
+  p?: { photo?: string | null; gender?: "MALE" | "FEMALE" | null; name: string; email: string; phone: string | null; status: string; branchIds: string[]; address: string | null; joiningDate: string; emergencyContact: string | null; commissionPercent: string };
 }) {
   const agent = kind === "AGENT";
   return (
     <ActionForm action={savePersonAction.bind(null, kind, id)} className="space-y-6">
       <section>
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Contact</h3>
+        <div className="mb-4"><PhotoGenderFields photo={p?.photo} gender={p?.gender} name={p?.name} /></div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div><label className="label">Full name *</label><input name="name" required defaultValue={p?.name} className="input" /></div>
           <div><label className="label">Phone *</label><input name="phone" type="tel" required defaultValue={p?.phone ?? ""} className="input" placeholder="+91 9xxxx xxxxx" /></div>

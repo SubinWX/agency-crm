@@ -12,9 +12,21 @@ export interface WorkFilters {
   from?: string;
   to?: string;
   branchId?: string;
+  agentId?: string;
+  workerId?: string;
+  /** date_asc (default for Day/Month views), date_desc, ref_asc, ref_desc, updated */
+  sort?: string;
   page?: number;
   pageSize?: number;
 }
+
+export const WORK_SORTS: Record<string, { label: string; orderBy: Prisma.WorkOrderByWithRelationInput[] }> = {
+  date_desc: { label: "Date — newest first", orderBy: [{ workDate: "desc" }, { reference: "desc" }] },
+  date_asc: { label: "Date — oldest first", orderBy: [{ workDate: "asc" }, { reference: "asc" }] },
+  ref_desc: { label: "Work ID — newest", orderBy: [{ reference: "desc" }] },
+  ref_asc: { label: "Work ID — oldest", orderBy: [{ reference: "asc" }] },
+  updated: { label: "Recently updated", orderBy: [{ updatedAt: "desc" }] },
+};
 
 export async function listWorks(actor: Actor, f: WorkFilters = {}) {
   const page = Math.max(1, f.page ?? 1);
@@ -36,12 +48,14 @@ export async function listWorks(actor: Actor, f: WorkFilters = {}) {
   if (f.from && isIsoDate(f.from)) and.push({ workDate: { gte: toDbDate(f.from) } });
   if (f.to && isIsoDate(f.to)) and.push({ workDate: { lte: toDbDate(f.to) } });
   if (f.branchId) and.push({ branchId: f.branchId });
+  if (f.agentId) and.push({ agentId: f.agentId });
+  if (f.workerId) and.push({ assignments: { some: { workerId: f.workerId, removedAt: null } } });
   const where: Prisma.WorkWhereInput = { AND: and };
 
   const [items, total] = await Promise.all([
     prisma.work.findMany({
       where,
-      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+      orderBy: (WORK_SORTS[f.sort ?? ""] ?? WORK_SORTS.date_desc).orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
       select: {

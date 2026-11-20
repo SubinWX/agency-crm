@@ -1,3 +1,4 @@
+import { dayEnd, dayStart } from "../../lib/dates";
 /**
  * Branch-wise stock (spec §32–33).
  *
@@ -245,7 +246,7 @@ export async function listMovements(actor: Actor, f: { itemId?: string; branchId
     ...(f.itemId ? { itemId: f.itemId } : {}),
     ...(f.workId ? { workId: f.workId } : {}),
     ...(f.type && f.type in MOVEMENT_LABELS ? { type: f.type as StockMovementType } : {}),
-    ...(f.from || f.to ? { createdAt: { ...(f.from ? { gte: new Date(`${f.from}T00:00:00+05:30`) } : {}), ...(f.to ? { lte: new Date(`${f.to}T23:59:59+05:30`) } : {}) } } : {}),
+    ...(f.from || f.to ? { createdAt: { ...(f.from ? { gte: dayStart(f.from) } : {}), ...(f.to ? { lte: dayEnd(f.to) } : {}) } } : {}),
   };
   const [items, total] = await Promise.all([
     prisma.stockMovement.findMany({

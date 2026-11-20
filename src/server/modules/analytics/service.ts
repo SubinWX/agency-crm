@@ -12,7 +12,7 @@
  */
 import { Prisma, type WorkStatus } from "@prisma/client";
 import { prisma } from "../../db";
-import { addDaysIso, BUSINESS_TZ, businessToday, fromDbDate, isIsoDate, toDbDate } from "../../lib/dates";
+import { addDaysIso, businessTz, businessToday, fromDbDate, isIsoDate, toDbDate } from "../../lib/dates";
 import { forbidden, invalid } from "../../lib/errors";
 import { canAccessBranch, type Actor } from "../../rbac/actor";
 import { toPaise } from "../billing/calc";
@@ -161,7 +161,7 @@ async function agentPerformanceScoped({ from, to, branchIds }: { from: string; t
     if (w.status === "CANCELLED") a.cancelled++;
     if (DONE.includes(w.status)) {
       a.completed++;
-      const approvedDay = w.approvedAt ? new Date(w.approvedAt).toLocaleDateString("en-CA", { timeZone: BUSINESS_TZ }) : null;
+      const approvedDay = w.approvedAt ? new Date(w.approvedAt).toLocaleDateString("en-CA", { timeZone: businessTz() }) : null;
       if (approvedDay && approvedDay <= addDaysIso(fromDbDate(w.workDate), cfg.graceDays)) a.onTime++;
     }
     a.revenue += revByWork.get(w.id) ?? 0;
@@ -274,7 +274,7 @@ export async function monthlyFinance(actor: Actor, r: Partial<Range>): Promise<M
 async function monthlyFinanceScoped({ from, to, branchIds }: { from: string; to: string; branchIds: string[] | null }): Promise<MonthRow[]> {
   const f = toDbDate(from);
   const t = toDbDate(to);
-  const tz = BUSINESS_TZ;
+  const tz = businessTz();
   type Row = { m: string; v: Prisma.Decimal | null };
   const [rev, rec, exp, sal, com, mat] = await Promise.all([
     prisma.$queryRaw<Row[]>`SELECT to_char("invoiceDate", 'YYYY-MM') m, SUM("taxableTotal") v FROM "Invoice"
@@ -347,7 +347,7 @@ export async function branchPerformance(actor: Actor, r: Partial<Range>) {
 
 export async function inventoryMovementByMonth(actor: Actor, r: Partial<Range>) {
   const { from, to, branchIds } = resolveScope(actor, r);
-  const tz = BUSINESS_TZ;
+  const tz = businessTz();
   const rows = await prisma.$queryRaw<{ m: string; inv: Prisma.Decimal | null; outv: Prisma.Decimal | null }[]>`
     SELECT to_char(m."createdAt" AT TIME ZONE ${tz}, 'YYYY-MM') m,
            SUM(CASE WHEN m."change" > 0 AND m."type" IN ('IN') THEN m."change" * COALESCE(m."unitCost", i."purchasePrice", 0) ELSE 0 END) inv,

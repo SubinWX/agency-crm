@@ -2,7 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma, transaction, type Tx } from "../../db";
 import { audit } from "../../lib/audit";
-import { forbidden, notFound, parseInput } from "../../lib/errors";
+import { forbidden, invalid, notFound, parseInput } from "../../lib/errors";
+import { storeImage, type UploadInput } from "../../storage";
 import { can, canAccessBranch, requirePermission, type Actor } from "../../rbac/actor";
 
 export const customerInput = z.object({
@@ -14,6 +15,7 @@ export const customerInput = z.object({
   location: z.string().trim().max(500).optional(),
   notes: z.string().trim().max(2000).optional(),
   branchId: z.string().optional(),
+  gender: z.enum(["MALE", "FEMALE"]).or(z.literal("")).optional(),
 });
 export type CustomerInput = z.input<typeof customerInput>;
 
@@ -74,6 +76,7 @@ export async function createCustomer(actor: Actor, input: CustomerInput, tx?: Tx
         address: blankToNull(d.address),
         location: blankToNull(d.location),
         notes: blankToNull(d.notes),
+        gender: d.gender || null,
         branchId: d.branchId || null,
         createdById: actor.id,
       },
@@ -103,12 +106,36 @@ export async function updateCustomer(actor: Actor, id: string, input: CustomerIn
         address: blankToNull(d.address),
         location: blankToNull(d.location),
         notes: blankToNull(d.notes),
+        ...(d.gender !== undefined ? { gender: d.gender || null } : {}),
         branchId: d.branchId || before.branchId,
       },
     });
     await audit(tx, actor, { action: "customer.update", entityType: "Customer", entityId: id, before, after });
     return after;
   });
+}
+
+/** Set or remove a customer's photo (square, optimised). */
+export async function setCustomerPhoto(actor: Actor, id: string, file: UploadInput | null, remove = false) {
+  requirePermission(actor, "customers.edit");
+  const c = await prisma.customer.findFirst({ where: { id, deletedAt: null, AND: [customerScope(actor)] }, select: { id: true, photoKey: true } });
+  if (!c) throw notFound("Customer");
+  let key: string | null = null;
+  if (!remove) {
+    if (!file || file.size === 0) throw invalid("Choose a photo.");
+    if (file.size > 10 * 1024 * 1024) throw invalid("Photo is too large (max 10 MB).");
+    key = (await storeImage(file, "customer-photos", { maxEdge: 512, square: true })).storageKey;
+  }
+  await transaction(async (tx) => {
+    await tx.customer.update({ where: { id }, data: { photoKey: key } });
+    await audit(tx, actor, { action: remove ? "customer.photo_remove" : "customer.photo_change", entityType: "Customer", entityId: id, before: { photoKey: c.photoKey }, after: { photoKey: key } });
+  });
+}
+
+/** Photo storage key, if the actor may see this customer. */
+export async function getCustomerPhotoKey(actor: Actor, id: string) {
+  const c = await getCustomer(actor, id);
+  return c.photoKey;
 }
 
 export async function archiveCustomer(actor: Actor, id: string, reason: string) {

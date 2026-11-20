@@ -68,13 +68,13 @@ export function InvoiceEditor({
           <thead className="bg-slate-50">
             <tr>
               <th className="table-th w-[34%]">Item / service</th>
-              <th className="table-th">HSN/SAC</th>
               <th className="table-th">Qty</th>
               <th className="table-th">Unit</th>
               <th className="table-th">Rate (₹)</th>
               <th className="table-th">Discount (₹)</th>
               {taxType !== "NONE" && <th className="table-th">GST %</th>}
               <th className="table-th text-right">Amount</th>
+              <th className="table-th">HSN/SAC</th>
               <th className="table-th" />
             </tr>
           </thead>
@@ -84,13 +84,13 @@ export function InvoiceEditor({
               return (
                 <tr key={i} className="align-top">
                   <td className="p-2"><input value={it.description} onChange={(e) => set(i, "description", e.target.value)} placeholder="e.g. Granite counter top" className="input" /></td>
-                  <td className="p-2"><input value={it.hsnSac} onChange={(e) => set(i, "hsnSac", e.target.value)} className="input w-24" /></td>
                   <td className="p-2"><input value={it.quantity} onChange={(e) => set(i, "quantity", e.target.value)} inputMode="decimal" className="input w-20" /></td>
                   <td className="p-2"><input value={it.unit} onChange={(e) => set(i, "unit", e.target.value)} placeholder="sq ft" className="input w-20" /></td>
                   <td className="p-2"><input value={it.rate} onChange={(e) => set(i, "rate", e.target.value)} inputMode="decimal" className="input w-28" /></td>
                   <td className="p-2"><input value={it.discount} onChange={(e) => set(i, "discount", e.target.value)} inputMode="decimal" className="input w-24" /></td>
                   {taxType !== "NONE" && <td className="p-2"><input value={it.taxRate} onChange={(e) => set(i, "taxRate", e.target.value)} inputMode="decimal" className="input w-20" /></td>}
                   <td className="p-2 pt-4 text-right font-medium">{line && (it.description.trim() || it.rate) ? formatINR(line.lineTotal) : "—"}</td>
+                  <td className="p-2"><input value={it.hsnSac} onChange={(e) => set(i, "hsnSac", e.target.value)} placeholder="Optional" aria-label="HSN/SAC code" className="input w-24" /></td>
                   <td className="p-2 pt-3">
                     {items.length > 1 && (
                       <button type="button" onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))} className="rounded px-2 py-1 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove line">✕</button>

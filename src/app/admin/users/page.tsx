@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PersonAvatar } from "@/components/person-avatar";
 import { PageHeader } from "@/components/ui";
 import { requirePagePermission } from "@/server/auth/session";
 import { formatDateTime } from "@/server/lib/dates";
@@ -23,7 +24,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           <tbody className="divide-y divide-slate-100">
             {users.map((u) => (
               <tr key={u.id} className="hover:bg-slate-50">
-                <td className="table-td"><span className="font-medium">{u.name}</span><div className="text-xs text-slate-500">{u.email}</div></td>
+                <td className="table-td"><div className="flex items-center gap-3"><PersonAvatar src={u.photoUrl ? `/api/avatar/${u.id}?v=${u.updatedAt.getTime()}` : null} gender={u.gender} name={u.name} size={36} /><div className="min-w-0"><span className="font-medium">{u.name}</span><div className="text-xs text-slate-500">{u.email}</div></div></div></td>
                 <td className="table-td">{u.role.name}</td>
                 <td className="table-td text-xs">{u.branches.map((b) => b.branch.name).join(", ") || "—"}</td>
                 <td className="table-td text-xs">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "Never"}</td>

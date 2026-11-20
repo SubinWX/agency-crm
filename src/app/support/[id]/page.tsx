@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { ImageInput } from "@/components/image-input";
 import { notFound } from "next/navigation";
-import { replyAction, requesterAction_, updateTicketAction } from "@/app/actions/support";
+import { rateTicketAction, replyAction, requesterAction_, updateTicketAction } from "@/app/actions/support";
+import { StarRatingInput, Stars } from "@/components/star-rating";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { PriorityLabel, TicketStatusBadge } from "@/components/support-ui";
 import { Card, DefinitionList } from "@/components/ui";
@@ -29,7 +31,7 @@ function Attachments({ items }: { items: Att[] }) {
   );
 }
 
-const EVENT_TEXT: Record<string, string> = { created: "Raised the ticket", status: "Changed status", priority: "Changed priority", assigned: "Assigned", category: "Changed category", resolved: "Resolved", closed: "Closed", reopened: "Reopened" };
+const EVENT_TEXT: Record<string, string> = { created: "Raised the ticket", status: "Changed status", priority: "Changed priority", assigned: "Assigned", category: "Changed category", resolved: "Resolved", closed: "Closed", reopened: "Reopened", reviewed: "Rated the support" };
 
 export default async function TicketPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const actor = await requireUser();
@@ -75,6 +77,25 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
           )}
         </div>
       )}
+      {(t.status === "RESOLVED" || closed) && isRequester && (
+        <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5">
+          <p className="font-semibold text-slate-900">{t.rating ? "Your review" : "How was our support?"}</p>
+          <p className="mb-3 text-sm text-slate-600">{t.rating ? "Thanks for your feedback. You can change it any time." : "Your rating helps us improve. It takes a few seconds."}</p>
+          <ActionForm action={rateTicketAction.bind(null, t.id)} className="space-y-3">
+            <StarRatingInput name="rating" defaultValue={t.rating ?? 0} />
+            <textarea name="comment" rows={2} maxLength={1000} defaultValue={t.ratingComment ?? ""} className="input" placeholder="Tell us what went well or what we could do better (optional)" />
+            <SubmitButton>{t.rating ? "Update review" : "Submit review"}</SubmitButton>
+          </ActionForm>
+        </div>
+      )}
+      {t.rating && !isRequester && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+          <Stars value={t.rating} />
+          <span className="font-semibold text-amber-900">{t.rating}/5 from {name(t.submittedById)}</span>
+          {t.ratingComment && <span className="text-slate-700">“{t.ratingComment}”</span>}
+          {t.ratedAt && <span className="text-xs text-slate-400">{formatDateTime(t.ratedAt)}</span>}
+        </div>
+      )}
       {t.status === "WAITING_FOR_USER" && isRequester && (
         <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">Support is waiting for your reply. Please answer below.</div>
       )}
@@ -108,7 +129,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
               <ActionForm action={replyAction.bind(null, t.id)} resetOnSuccess>
                 <textarea name="body" required rows={4} maxLength={5000} className="input" placeholder="Write a message…" />
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <input name="attachments" type="file" accept="image/*,application/pdf" multiple className="text-sm" />
+                  <ImageInput name="attachments" accept="image/*,application/pdf" multiple maxFiles={5} label="Attach" />
                   {manager && <label className="flex items-center gap-2 text-sm text-amber-800"><input type="checkbox" name="internal" /> Internal note (staff only)</label>}
                 </div>
                 <SubmitButton pendingText="Sending…">Send</SubmitButton>
@@ -175,7 +196,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
               {t.events.map((e) => (
                 <li key={e.id}>
                   <span className="font-medium text-slate-700">{EVENT_TEXT[e.action] ?? e.action}</span>
-                  {e.fromValue && e.action !== "created" && e.action !== "category" && e.action !== "assigned" ? ` ${label(e.fromValue)} → ${label(e.toValue)}` : e.toValue && e.action !== "created" ? ` → ${label(e.toValue)}` : ""}
+                  {e.action === "reviewed" ? ` ${e.toValue}★` : e.fromValue && e.action !== "created" && e.action !== "category" && e.action !== "assigned" ? ` ${label(e.fromValue)} → ${label(e.toValue)}` : e.toValue && e.action !== "created" ? ` → ${label(e.toValue)}` : ""}
                   {e.note && <span className="text-slate-500"> · {e.note}</span>}
                   <div className="text-slate-400">{name(e.userId)} · {formatDateTime(e.createdAt)}</div>
                 </li>

@@ -14,7 +14,7 @@ const s = (fd: FormData, k: string) => {
 
 export async function updateProfileAction(_p: R | null, fd: FormData): Promise<R> {
   return runAction(async () => {
-    await updateOwnProfile(await actorOrThrow(), { name: s(fd, "name"), phone: s(fd, "phone") });
+    await updateOwnProfile(await actorOrThrow(), { name: s(fd, "name"), phone: s(fd, "phone"), gender: fd.has("gender") ? s(fd, "gender") ?? "" : undefined });
     revalidatePath("/", "layout");
   }, "Profile saved.");
 }

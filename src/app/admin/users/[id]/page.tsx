@@ -32,7 +32,7 @@ export default async function EditUserPage({ params, searchParams }: { params: P
       <div className="grid gap-5 xl:grid-cols-3">
         <Card title="Edit user" className="xl:col-span-2">
           <ActionForm action={saveUserAction.bind(null, visible.id)} className="space-y-5">
-            <UserFields u={visible} roles={assignable} branches={branches} />
+            <UserFields u={visible} roles={assignable.map((r) => ({ id: r.id, name: r.name, isSuperAdmin: r.isSuperAdmin }))} branches={branches} />
             <SubmitButton>Save user</SubmitButton>
           </ActionForm>
         </Card>

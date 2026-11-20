@@ -23,7 +23,22 @@ export default async function RolesPage() {
           return (
             <Card key={role.id} title={`${role.name} · ${role.portal.toLowerCase()} portal`}>
               {role.isSuperAdmin ? (
-                <p className="text-sm text-slate-600">Super Admin always has every permission and access to all branches.</p>
+                <>
+                  <p className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">Super Admin has full access built in — every permission below and every branch. It can&apos;t be reduced.</p>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {Object.entries(groups).map(([group, keys]) => (
+                      <fieldset key={group} disabled>
+                        <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{group}</legend>
+                        {keys.map((k) => (
+                          <label key={k} className="flex items-start gap-2 py-0.5 text-sm text-slate-600">
+                            <input type="checkbox" checked readOnly className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                            <span>{PERMISSIONS[k as keyof typeof PERMISSIONS][1]}</span>
+                          </label>
+                        ))}
+                      </fieldset>
+                    ))}
+                  </div>
+                </>
               ) : (
                 <ActionForm action={setRolePermissionsAction.bind(null, role.id)}>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

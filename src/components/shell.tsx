@@ -1,6 +1,7 @@
 import { logoutAction } from "@/app/actions/auth";
 import { prisma } from "@/server/db";
-import { BUSINESS_TZ } from "@/server/lib/dates";
+import { formatClock } from "@/lib/clock";
+import { setBusinessTz } from "@/server/lib/dates";
 import { unreadCount } from "@/server/modules/notifications/service";
 import { getSetting } from "@/server/modules/settings/service";
 import type { Actor } from "@/server/rbac/actor";
@@ -29,12 +30,15 @@ export async function AppShell({
   searchAction?: string;
   children: React.ReactNode;
 }) {
-  const [unread, user, company] = await Promise.all([
+  const [unread, user, company, dt] = await Promise.all([
     unreadCount(actor.id),
-    prisma.user.findUnique({ where: { id: actor.id }, select: { name: true, email: true, photoUrl: true, updatedAt: true } }),
+    prisma.user.findUnique({ where: { id: actor.id }, select: { name: true, email: true, photoUrl: true, gender: true, updatedAt: true } }),
     getSetting("company"),
+    getSetting("dateTime"),
   ]);
-  const todayLabel = new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: BUSINESS_TZ });
+  const timeZone = setBusinessTz(dt.timeZone); // keep this server process in sync with Settings
+  const hour12 = dt.clockFormat !== "24h";
+  const clock = { timeZone, hour12, initial: formatClock(new Date(), timeZone, hour12) };
   return (
     <ShellChrome
       nav={nav}
@@ -43,6 +47,7 @@ export async function AppShell({
         name: user?.name ?? actor.name,
         email: user?.email ?? "",
         roleLabel,
+        gender: user?.gender ?? null,
         avatarUrl: user?.photoUrl ? `/api/avatar/${actor.id}?v=${user.updatedAt.getTime()}` : null,
       }}
       company={company.name}
@@ -51,7 +56,7 @@ export async function AppShell({
       alertsHref={alertsHref}
       accountHref={accountHref}
       searchAction={searchAction}
-      todayLabel={todayLabel}
+      clock={clock}
       logoutAction={logoutAction}
       portal={actor.portal}
       userId={actor.id}

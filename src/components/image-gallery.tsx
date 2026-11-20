@@ -1,12 +1,62 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Pencil, Trash2, X } from "lucide-react";
+import type { ActionResult } from "@/server/lib/errors";
+import { ActionForm, SubmitButton } from "./action-form";
+import { ImageInput } from "./image-input";
 
-export type GalleryImage = { src: string; caption?: string | null; meta?: string | null; badge?: string | null };
+export type GalleryImage = { src: string; caption?: string | null; meta?: string | null; badge?: string | null; id?: string };
+
+type ImgAction = (id: string, p: ActionResult<unknown> | null, fd: FormData) => Promise<ActionResult<unknown>>;
+
+/** Small dialog used for replacing / removing an image right from its thumbnail. */
+function EditDialog({ mode, img, edit, onClose }: { mode: "replace" | "remove"; img: GalleryImage; edit: { replace: ImgAction; remove: ImgAction }; onClose: () => void }) {
+  const action = (mode === "replace" ? edit.replace : edit.remove).bind(null, img.id!);
+  useEffect(() => {
+    // Esc closes — unless the crop window is open on top.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector('[aria-label="Crop image"][role="dialog"]') && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-start gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={img.src} alt="" className="h-16 w-16 rounded-lg object-cover" />
+          <div className="flex-1">
+            <p className="font-semibold">{mode === "replace" ? "Replace image" : "Remove image"}</p>
+            <p className="text-xs text-slate-500">{mode === "replace" ? "The current image is kept in history." : "It's hidden from the work but kept in history."}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:text-slate-700" aria-label="Close"><X className="h-5 w-5" /></button>
+        </div>
+        <ActionForm action={async (p, fd) => { const r = await action(p, fd); if (r.ok) setTimeout(onClose, 600); return r; }} className="space-y-3">
+          {mode === "replace" && <ImageInput name="image" required label="Choose new image" />}
+          <input name="reason" required className="input" placeholder={mode === "replace" ? "Reason for replacing *" : "Reason for removing *"} autoFocus={mode === "remove"} />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+            <SubmitButton className={mode === "replace" ? "btn-primary" : "btn-danger"} pendingText={mode === "replace" ? "Uploading…" : "Removing…"}>{mode === "replace" ? "Replace" : "Remove"}</SubmitButton>
+          </div>
+        </ActionForm>
+      </div>
+    </div>
+  );
+}
 
 /** Thumbnail grid + lightbox with zoom, next/previous, full screen and download. */
-export function ImageGallery({ images, allowDownload = true }: { images: GalleryImage[]; allowDownload?: boolean }) {
+export function ImageGallery({
+  images,
+  allowDownload = true,
+  edit,
+}: {
+  images: GalleryImage[];
+  allowDownload?: boolean;
+  /** When given, each thumbnail shows Replace / Remove buttons (images need an `id`). */
+  edit?: { replace: ImgAction; remove: ImgAction };
+}) {
   const [open, setOpen] = useState<number | null>(null);
+  const [editing, setEditing] = useState<{ mode: "replace" | "remove"; img: GalleryImage } | null>(null);
   const [zoom, setZoom] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -38,13 +88,26 @@ export function ImageGallery({ images, allowDownload = true }: { images: Gallery
     <>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {images.map((img, i) => (
-          <button key={img.src} type="button" onClick={() => setOpen(i)} className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={img.src} alt={img.caption ?? "Work image"} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
-            {img.badge && <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">{img.badge}</span>}
-          </button>
+          <div key={img.src} className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+            <button type="button" onClick={() => setOpen(i)} className="h-full w-full" aria-label={`Open image ${i + 1}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={img.src} alt={img.caption ?? "Work image"} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
+            </button>
+            {img.badge && <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">{img.badge}</span>}
+            {edit && img.id && (
+              <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                <button type="button" onClick={() => setEditing({ mode: "replace", img })} className="rounded-md bg-white/95 p-1.5 text-slate-700 shadow hover:bg-white" aria-label={`Replace image ${i + 1}`} title="Replace">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={() => setEditing({ mode: "remove", img })} className="rounded-md bg-white/95 p-1.5 text-red-600 shadow hover:bg-white" aria-label={`Remove image ${i + 1}`} title="Remove">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
         ))}
       </div>
+      {editing && edit && <EditDialog mode={editing.mode} img={editing.img} edit={edit} onClose={() => setEditing(null)} />}
 
       {cur && (
         <div ref={boxRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex flex-col bg-black/95 text-white" onClick={close}>

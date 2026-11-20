@@ -61,12 +61,19 @@ model RolePermission {
   @@id([roleId, permissionId])
 }
 
+/// Picks the default profile icon when there is no photo.
+enum Gender {
+  MALE
+  FEMALE
+}
+
 model User {
   id           String       @id @default(cuid())
   name         String
   email        String       @unique
   phone        String?
   photoUrl     String?
+  gender       Gender?
   passwordHash String
   roleId       String
   role         Role         @relation(fields: [roleId], references: [id])
@@ -167,6 +174,9 @@ model Customer {
   address     String?
   location    String?
   notes       String?
+  gender      Gender?
+  /// Storage key of the customer's photo (customer-photos/…).
+  photoKey    String?
   status      RecordStatus @default(ACTIVE)
   branchId    String?
   branch      Branch?      @relation(fields: [branchId], references: [id])
@@ -801,6 +811,12 @@ model Item {
   supplier      Supplier?    @relation(fields: [supplierId], references: [id])
   notes         String?
   status        RecordStatus @default(ACTIVE)
+  /// Website: listed in the public product feed (/api/public/products) when true.
+  showOnWebsite Boolean      @default(false)
+  /// URL-friendly name used by the website (e.g. "granite-counter-top").
+  slug          String?      @unique
+  /// Optional link to this product's page on the company website.
+  websiteUrl    String?
   createdById   String
   createdAt     DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
@@ -812,6 +828,7 @@ model Item {
 
   @@index([kind, name])
   @@index([category])
+  @@index([showOnWebsite])
 }
 
 model ItemImage {
@@ -1011,6 +1028,10 @@ model SupportTicket {
   closedAt       DateTime?       @db.Timestamptz(3)
   closedById     String?
   lastActivityAt DateTime        @default(now()) @db.Timestamptz(3)
+  /// Requester's review after resolution: 1–5 stars + optional comment.
+  rating         Int?
+  ratingComment  String?
+  ratedAt        DateTime?       @db.Timestamptz(3)
   createdAt      DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
 

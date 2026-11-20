@@ -5,6 +5,7 @@ import { forbidden, invalid, notFound, parseInput } from "../../lib/errors";
 import { hashPassword, passwordPolicyError } from "../../auth/password";
 import { requirePermission, type Actor } from "../../rbac/actor";
 import { ALL_PERMISSION_KEYS } from "../../rbac/permissions";
+import { storeImage, type UploadInput } from "../../storage";
 
 const userInput = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
@@ -14,6 +15,8 @@ const userInput = z.object({
   branchIds: z.array(z.string()).default([]),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
   password: z.string().optional(),
+  /** Picks the default icon when there is no photo. Omit to leave unchanged. */
+  gender: z.enum(["MALE", "FEMALE"]).or(z.literal("")).optional(),
   /** Optional profile details (location, joining date, emergency contact). */
   profile: z
     .object({
@@ -67,6 +70,8 @@ export async function saveUser(actor: Actor, input: UserInput, id?: string) {
   if (!role) throw invalid("Role not found.");
   // Prevent role escalation: only Super Admin can create/modify Super Admins or role-managers.
   if (role.isSuperAdmin && !actor.isSuperAdmin) throw forbidden("Only a Super Admin can grant Super Admin access.");
+  // Super Admin has full access built in: always linked to every branch.
+  if (role.isSuperAdmin) d.branchIds = (await prisma.branch.findMany({ where: { deletedAt: null }, select: { id: true } })).map((b) => b.id);
   if (!actor.isSuperAdmin && d.branchIds.some((b) => !actor.branchIds.includes(b))) {
     throw forbidden("You can only assign branches you have access to.");
   }
@@ -92,6 +97,7 @@ export async function saveUser(actor: Actor, input: UserInput, id?: string) {
           phone: d.phone || null,
           roleId: d.roleId,
           status: d.status,
+          ...(d.gender !== undefined ? { gender: d.gender || null } : {}),
           ...(d.password ? { passwordHash: await hashPassword(d.password) } : {}),
           branches: { deleteMany: {}, create: d.branchIds.map((branchId) => ({ branchId })) },
         },
@@ -114,6 +120,7 @@ export async function saveUser(actor: Actor, input: UserInput, id?: string) {
         phone: d.phone || null,
         roleId: d.roleId,
         status: d.status,
+        gender: d.gender || null,
         passwordHash: await hashPassword(d.password!),
         branches: { create: d.branchIds.map((branchId) => ({ branchId })) },
       },
@@ -121,6 +128,25 @@ export async function saveUser(actor: Actor, input: UserInput, id?: string) {
     if (d.profile) await saveProfile(tx, user.id, d.profile);
     await audit(tx, actor, { action: "user.create", entityType: "User", entityId: user.id, after: { name: d.name, email: d.email, roleId: d.roleId, branchIds: d.branchIds, profile: d.profile ?? null } });
     return user;
+  });
+}
+
+/** Admin sets or removes someone's profile picture. Only a Super Admin can change a Super Admin's. */
+export async function setUserPhoto(actor: Actor, userId: string, file: UploadInput | null, remove = false) {
+  requirePermission(actor, "users.manage");
+  const u = await prisma.user.findFirst({ where: { id: userId, deletedAt: null }, include: { role: true, branches: true } });
+  if (!u) throw notFound("User");
+  if (u.role.isSuperAdmin && !actor.isSuperAdmin) throw forbidden("Only a Super Admin can edit a Super Admin.");
+  if (!actor.isSuperAdmin && u.branches.length && !u.branches.some((b) => actor.branchIds.includes(b.branchId))) throw forbidden();
+  let key: string | null = null;
+  if (!remove) {
+    if (!file || file.size === 0) throw invalid("Choose a picture.");
+    if (file.size > 10 * 1024 * 1024) throw invalid("Picture is too large (max 10 MB).");
+    key = (await storeImage(file, "avatars", { maxEdge: 512, square: true })).storageKey;
+  }
+  await transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { photoUrl: key } });
+    await audit(tx, actor, { action: remove ? "user.photo_remove" : "user.photo_change", entityType: "User", entityId: userId });
   });
 }
 

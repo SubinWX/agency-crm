@@ -10,20 +10,21 @@ import { storeImage, type UploadInput } from "../../storage";
 const profileSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
   phone: z.string().trim().max(20).regex(/^[0-9+\-\s()]*$/, "Enter a valid phone number").optional(),
+  gender: z.enum(["MALE", "FEMALE"]).or(z.literal("")).optional(),
 });
 
 export async function getOwnProfile(actor: Actor) {
   return prisma.user.findUniqueOrThrow({
     where: { id: actor.id },
-    select: { id: true, name: true, email: true, phone: true, photoUrl: true, updatedAt: true, lastLoginAt: true, createdAt: true, role: { select: { name: true } }, branches: { select: { branch: { select: { name: true } } } } },
+    select: { id: true, name: true, email: true, phone: true, photoUrl: true, gender: true, updatedAt: true, lastLoginAt: true, createdAt: true, role: { select: { name: true } }, branches: { select: { branch: { select: { name: true } } } } },
   });
 }
 
-export async function updateOwnProfile(actor: Actor, input: { name: string; phone?: string }) {
+export async function updateOwnProfile(actor: Actor, input: { name: string; phone?: string; gender?: string }) {
   const d = parseInput(profileSchema, input);
   await transaction(async (tx) => {
     const before = await tx.user.findUniqueOrThrow({ where: { id: actor.id }, select: { name: true, phone: true } });
-    await tx.user.update({ where: { id: actor.id }, data: { name: d.name, phone: d.phone || null } });
+    await tx.user.update({ where: { id: actor.id }, data: { name: d.name, phone: d.phone || null, ...(d.gender !== undefined ? { gender: d.gender || null } : {}) } });
     await audit(tx, actor, { action: "account.profile_update", entityType: "User", entityId: actor.id, before, after: { name: d.name, phone: d.phone || null } });
   });
 }
@@ -48,7 +49,7 @@ export async function setOwnPhoto(actor: Actor, file: UploadInput | null, remove
   if (!remove) {
     if (!file || file.size === 0) throw invalid("Choose a picture.");
     if (file.size > 5 * 1024 * 1024) throw invalid("Picture is too large (max 5 MB).");
-    key = (await storeImage(file, "avatars")).storageKey;
+    key = (await storeImage(file, "avatars", { maxEdge: 512, square: true })).storageKey;
   }
   await transaction(async (tx) => {
     await tx.user.update({ where: { id: actor.id }, data: { photoUrl: key } });

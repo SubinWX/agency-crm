@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseInput } from "../../lib/errors";
+import { DEFAULT_TZ, isValidTimeZone, setBusinessTz } from "../../lib/dates";
 import { prisma, type Tx } from "../../db";
 import { audit } from "../../lib/audit";
 import { requirePermission, type Actor } from "../../rbac/actor";
@@ -7,6 +8,11 @@ import type { PermissionKey } from "../../rbac/permissions";
 
 /** Typed, validated settings stored as JSON rows in the Setting table. */
 const schemas = {
+  /** "system" = the server's own time zone, otherwise an IANA zone like "Asia/Kolkata". */
+  dateTime: z.object({
+    timeZone: z.string().trim().min(1).refine((v) => v === "system" || isValidTimeZone(v), "Choose a valid time zone."),
+    clockFormat: z.enum(["12h", "24h"]).default("12h"),
+  }),
   company: z.object({
     name: z.string(),
     address: z.string().default(""),
@@ -14,6 +20,8 @@ const schemas = {
     email: z.string().default(""),
     gstNumber: z.string().default(""),
     logoKey: z.string().nullable().default(null),
+    /** PNG/JPG copy of the logo for PDFs (SVG logos are rendered to PNG). */
+    logoPdfKey: z.string().nullable().default(null),
   }),
   fullSlotMessage: z.object({
     template: z.string().min(1).max(500),
@@ -61,6 +69,31 @@ const schemas = {
     showCompletionImages: z.boolean(),
     showPayments: z.boolean(),
   }),
+  supportPortal: z.object({
+    headerCtaLabel: z.string().max(40),
+    headerCtaHref: z.string().max(300),
+    showBanner: z.boolean(),
+    bannerImageKey: z.string().nullable(),
+    bannerHeadline: z.string().max(120),
+    bannerSubtext: z.string().max(300),
+    bannerCtaLabel: z.string().max(40),
+    bannerCtaHref: z.string().max(300),
+    /** Darkness of the overlay on the banner image, 0–80 (%). */
+    bannerOverlay: z.number().int().min(0).max(80),
+    footerText: z.string().max(300),
+    contactEmail: z.string().max(120),
+    contactPhone: z.string().max(40),
+    address: z.string().max(300),
+    socials: z.object({
+      website: z.string().max(300),
+      facebook: z.string().max(300),
+      instagram: z.string().max(300),
+      linkedin: z.string().max(300),
+      x: z.string().max(300),
+      youtube: z.string().max(300),
+      whatsapp: z.string().max(40),
+    }),
+  }),
   numbering: z.object({
     padLength: z.number().int().min(3).max(10),
     prefixes: z.record(z.string(), z.string()),
@@ -71,7 +104,8 @@ export type SettingKey = keyof typeof schemas;
 export type SettingValue<K extends SettingKey> = z.infer<(typeof schemas)[K]>;
 
 export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
-  company: { name: "Agency CRM", address: "", phone: "", email: "", gstNumber: "", logoKey: null },
+  dateTime: { timeZone: DEFAULT_TZ, clockFormat: "12h" },
+  company: { name: "Agency CRM", address: "", phone: "", email: "", gstNumber: "", logoKey: null, logoPdfKey: null },
   fullSlotMessage: {
     template: "Slots are full for {date}. Next available dates: {next_available_dates}.",
   },
@@ -89,6 +123,22 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   inventory: { transfersEnabled: true },
   agentScore: { completionWeight: 40, onTimeWeight: 25, cancellationWeight: 15, revenueWeight: 20, graceDays: 1, minWorks: 3 },
   customerPortal: { showCompletionImages: true, showPayments: true },
+  supportPortal: {
+    headerCtaLabel: "New request",
+    headerCtaHref: "/support/new",
+    showBanner: true,
+    bannerImageKey: null,
+    bannerHeadline: "How can we help you today?",
+    bannerSubtext: "Raise a complaint or request and follow every reply here. We usually respond within one working day.",
+    bannerCtaLabel: "Raise a request",
+    bannerCtaHref: "/support/new",
+    bannerOverlay: 50,
+    footerText: "We're here to help with your works, invoices and anything else.",
+    contactEmail: "",
+    contactPhone: "",
+    address: "",
+    socials: { website: "", facebook: "", instagram: "", linkedin: "", x: "", youtube: "", whatsapp: "" },
+  },
   numbering: {
     padLength: 6,
     prefixes: { WRK: "WRK", INV: "INV", PAY: "PAY", SUP: "SUP", EXP: "EXP", STK: "STK" },
@@ -125,4 +175,13 @@ export function renderTemplate(template: string, vars: Record<string, string | n
   return template.replace(/\{(\w+)\}/g, (m, name: string) =>
     Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : m,
   );
+}
+
+/** Load the saved time zone into memory (startup, page renders, after saving). */
+export async function loadBusinessTz(): Promise<string> {
+  try {
+    return setBusinessTz((await getSetting("dateTime")).timeZone);
+  } catch {
+    return setBusinessTz(DEFAULT_TZ);
+  }
 }
